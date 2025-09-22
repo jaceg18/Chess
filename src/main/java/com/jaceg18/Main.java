@@ -1,13 +1,11 @@
 package com.jaceg18;
 
 
+import com.jaceg18.Gameplay.Opening.OpeningBook;
 import com.jaceg18.Gameplay.Search.AI.AiFactory;
 import com.jaceg18.Gameplay.Search.SearchEngine;
-import com.jaceg18.Gameplay.Opening.OpeningBook;
 import com.jaceg18.Gameplay.UI.ChessBoardPanel;
-
 import com.jaceg18.Gameplay.UI.EngineAdapter;
-
 
 import javax.swing.*;
 import java.awt.*;

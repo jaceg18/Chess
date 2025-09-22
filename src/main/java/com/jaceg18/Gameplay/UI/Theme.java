@@ -17,7 +17,7 @@ class Theme {
     static final Color BOARD_BORDER = new Color(40, 30, 20, 180);
     static final Color COORD = new Color(30, 30, 30, 160);
 
-    static final int R = 10; // corner radius
+    static final int R = 10;
     static final Stroke DASH = new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[]{6f, 6f}, 0f);
 
     static Font coordFont(int S) { return new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(11, S / 7)); }

@@ -40,18 +40,10 @@ public final class MoveGen {
         final long own = white ? s.whitePieces() : s.blackPieces();
         final long opp = white ? s.blackPieces() : s.whitePieces();
         final long occ = s.allPieces();
-        final long empty = ~occ; // (optionally) & 0xFFFFFFFFFFFFFFFFL;
-
-        // ----------------
-        // PAWNS
-        // ----------------
+        final long empty = ~occ;
         long pawns = s.pawns(white);
-
-        // Singles
         long singles = white ? ((pawns << 8) & empty)
                 : ((pawns >>> 8) & empty);
-
-        // Emit singles (with promotion on last rank)
         long singlesBB = singles;
         while (singlesBB != 0) {
             long toBB = singlesBB & -singlesBB;
@@ -61,7 +53,6 @@ public final class MoveGen {
             int toRank = to >>> 3;
             boolean promo = white ? (toRank == 7) : (toRank == 0);
             if (promo) {
-                // 0=N,1=B,2=R,3=Q
                 sink.accept(GameState.move(from, to, 0, 0, 0));
                 sink.accept(GameState.move(from, to, 0, 0, 1));
                 sink.accept(GameState.move(from, to, 0, 0, 2));
@@ -71,8 +62,6 @@ public final class MoveGen {
             }
             singlesBB ^= toBB;
         }
-
-        // Doubles (from rank 2/7)
         long doubles;
         if (white) {
             long wpOnStart = pawns & BitUtility.maskForRank(2);
@@ -91,8 +80,6 @@ public final class MoveGen {
             sink.accept(GameState.move(from, to, 0, GameState.FLAG_DBL, -1));
             dblBB ^= toBB;
         }
-
-        // Captures (normal)
         long pawnAttacks = white ? BitUtility.whitePawnAttacks(pawns)
                 : BitUtility.blackPawnAttacks(pawns);
         long pawnCaps = pawnAttacks & opp;
@@ -101,10 +88,9 @@ public final class MoveGen {
         while (capsBB != 0) {
             long toBB = capsBB & -capsBB;
             int to = Long.numberOfTrailingZeros(toBB);
-            int tf = to & 7; // file
+            int tf = to & 7;
 
             if (white) {
-                // from NW: to-9
                 if (tf > 0) {
                     int from = to - 9;
                     if (from >= 0 && ((pawns & (1L << from)) != 0L)) {
@@ -120,7 +106,6 @@ public final class MoveGen {
                         }
                     }
                 }
-                // from NE: to-7
                 if (tf < 7) {
                     int from = to - 7;
                     if (from >= 0 && ((pawns & (1L << from)) != 0L)) {
@@ -137,7 +122,6 @@ public final class MoveGen {
                     }
                 }
             } else {
-                // from SW: to+7
                 if (tf > 0) {
                     int from = to + 7;
                     if (from < 64 && ((pawns & (1L << from)) != 0L)) {
@@ -153,7 +137,6 @@ public final class MoveGen {
                         }
                     }
                 }
-                // from SE: to+9
                 if (tf < 7) {
                     int from = to + 9;
                     if (from < 64 && ((pawns & (1L << from)) != 0L)) {
@@ -173,8 +156,6 @@ public final class MoveGen {
 
             capsBB ^= toBB;
         }
-
-        // En passant
         int ep = s.epSquare();
         if (ep != -1) {
             int tf = ep & 7;
@@ -206,10 +187,6 @@ public final class MoveGen {
                 }
             }
         }
-
-        // ----------------
-        // KNIGHTS
-        // ----------------
         long knights = s.knights(white);
         long nBB = knights;
         while (nBB != 0) {
@@ -226,10 +203,6 @@ public final class MoveGen {
             }
             nBB ^= fromBB;
         }
-
-        // ----------------
-        // BISHOPS
-        // ----------------
         long bishops = s.bishops(white);
         long bBB = bishops;
         while (bBB != 0) {
@@ -246,10 +219,6 @@ public final class MoveGen {
             }
             bBB ^= fromBB;
         }
-
-        // ----------------
-        // ROOKS
-        // ----------------
         long rooks = s.rooks(white);
         long rBB = rooks;
         while (rBB != 0) {
@@ -266,10 +235,6 @@ public final class MoveGen {
             }
             rBB ^= fromBB;
         }
-
-        // ----------------
-        // QUEENS
-        // ----------------
         long queens = s.queens(white);
         long qBB = queens;
         while (qBB != 0) {
@@ -286,10 +251,6 @@ public final class MoveGen {
             }
             qBB ^= fromBB;
         }
-
-        // ----------------
-        // KING (steps + castling)
-        // ----------------
         long king = s.king(white);
         if (king != 0) {
             int from = Long.numberOfTrailingZeros(king);
@@ -302,8 +263,6 @@ public final class MoveGen {
                 sink.accept(GameState.move(from, to, 5, flags, -1));
                 t ^= toBit;
             }
-
-            // Castling (through-check safe)
             if (white) {
                 int e1 = BitUtility.squareIndexOf("e1");
                 int f1 = BitUtility.squareIndexOf("f1");
@@ -311,8 +270,6 @@ public final class MoveGen {
                 int d1 = BitUtility.squareIndexOf("d1");
                 int c1 = BitUtility.squareIndexOf("c1");
                 int b1 = BitUtility.squareIndexOf("b1");
-
-                // WK-side: right bit 1
                 if ((s.castlingRights() & 0b0001) != 0) {
                     boolean pathEmpty = ((occ & (BitUtility.maskFor("f1") | BitUtility.maskFor("g1"))) == 0);
                     if (pathEmpty
@@ -322,7 +279,6 @@ public final class MoveGen {
                         sink.accept(GameState.move(e1, g1, 5, GameState.FLAG_CASTLE, -1));
                     }
                 }
-                // WQ-side: right bit 2
                 if ((s.castlingRights() & 0b0010) != 0) {
                     boolean pathEmpty = ((occ & (BitUtility.maskFor("d1") | BitUtility.maskFor("c1") | BitUtility.maskFor("b1"))) == 0);
                     if (pathEmpty
@@ -339,8 +295,6 @@ public final class MoveGen {
                 int d8 = BitUtility.squareIndexOf("d8");
                 int c8 = BitUtility.squareIndexOf("c8");
                 int b8 = BitUtility.squareIndexOf("b8");
-
-                // BK-side: right bit 4
                 if ((s.castlingRights() & 0b0100) != 0) {
                     boolean pathEmpty = ((occ & (BitUtility.maskFor("f8") | BitUtility.maskFor("g8"))) == 0);
                     if (pathEmpty
@@ -350,7 +304,6 @@ public final class MoveGen {
                         sink.accept(GameState.move(e8, g8, 5, GameState.FLAG_CASTLE, -1));
                     }
                 }
-                // BQ-side: right bit 8
                 if ((s.castlingRights() & 0b1000) != 0) {
                     boolean pathEmpty = ((occ & (BitUtility.maskFor("d8") | BitUtility.maskFor("c8") | BitUtility.maskFor("b8"))) == 0);
                     if (pathEmpty

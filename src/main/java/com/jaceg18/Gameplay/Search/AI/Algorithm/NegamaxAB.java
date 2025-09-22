@@ -1,9 +1,9 @@
 package com.jaceg18.Gameplay.Search.AI.Algorithm;
 
+import com.jaceg18.Gameplay.Search.AI.Evaluation.EvaluationStrategy;
 import com.jaceg18.Gameplay.Search.AI.RepetitionTracker;
 import com.jaceg18.Gameplay.Search.AI.SearchConstants;
 import com.jaceg18.Gameplay.Search.AI.SearchMetrics;
-import com.jaceg18.Gameplay.Search.AI.Evaluation.EvaluationStrategy;
 import com.jaceg18.Gameplay.TB.FenUtil;
 import com.jaceg18.Gameplay.TB.TablebaseClient;
 import com.jaceg18.Gameplay.UI.ChessBoardPanel;
@@ -12,9 +12,7 @@ import com.jaceg18.Gameplay.Utility.GameState;
 import com.jaceg18.Gameplay.Utility.MoveGen;
 import com.jaceg18.Gameplay.Zobrist;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.IntConsumer;import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 
@@ -26,13 +24,11 @@ public final class NegamaxAB implements SearchAlgorithm {
     private final RepetitionTracker rep;
     private final EvaluationStrategy eval;
     private final SearchMetrics metrics;
-    private final SearchConstants C = new SearchConstants();
 
     private final IntSupplier maxDepthSupplier;
 
     private final GameState.Undo[] undo = new GameState.Undo[SearchConstants.MAX_PLY];
 
-    // Reuse a TT probe object per ply to avoid allocating in every node.
     private final TranspositionTable.ProbeOut[] probeOutByPly =
             new TranspositionTable.ProbeOut[SearchConstants.MAX_PLY];
 
@@ -56,31 +52,15 @@ public final class NegamaxAB implements SearchAlgorithm {
         for (int i = 0; i < probeOutByPly.length; i++) probeOutByPly[i] = new TranspositionTable.ProbeOut();
     }
 
-    // --- helpers in NegamaxAB ---
-    private static boolean isWinningMate(int score) { return Util.isMateScore(score) && score > 0; }
-    private int matePlies(int score) { return SearchConstants.MATE - Math.abs(score); }
 
-    private String mateForSide(int score, boolean rootWhiteToMove) {
-        boolean forSideToMove = score > 0;              // + = winning for side to move at root
-        boolean whiteWins = forSideToMove ? rootWhiteToMove : !rootWhiteToMove;
-        return whiteWins ? "White" : "Black";
-    }
-
-    /* ===========================
-       PUBLIC ENTRYPOINTS
-       =========================== */
-
-    /** Original signature retained (no history seeding). */
     @Override
     public int computeBestMove(GameState root, IntConsumer progress) {
-        return computeBestMove(root, /*history*/ null, progress);
+        return computeBestMove(root, null, progress);
     }
 
-    /** New overload that accepts the played move history to enable true threefold detection. */
     public int computeBestMove(GameState root, List<Integer> history, IntConsumer progress) {
         if (progress != null) progress.accept(0);
 
-        // Initialize repetition stack (seed from history if given).
         seedRepetition(root, history);
 
         metrics.reset();
@@ -104,64 +84,56 @@ public final class NegamaxAB implements SearchAlgorithm {
                             ChessBoardPanel.console.logInfo("TB: " + tb.category + dtzTxt + ", Best=" + tb.bestUci);
                         }
                         if (progress != null) progress.accept(100);
-                        return tbMove; // perfect move; skip search
+                        return tbMove;
                     }
                 }
             }
         } catch (Throwable t) {
-            // Fail quietly and just search
             ChessBoardPanel.console.logWarn("TB probe failed (searching): " + t.getMessage());
         }
-        // ================== end optional TB block ========================
+
 
         int bestMove = -1, bestScore = -SearchConstants.INF;
         long t0 = System.nanoTime();
 
         int maxDepth = maxDepthSupplier.getAsInt();
 
-        // Aspiration anchor
         int prevScore = 0;
 
-        outer:
         for (int depth = 1; depth <= maxDepth; depth++) {
             long ds = System.nanoTime();
             long ns = metrics.nodes;
 
-            // Root moves — avoid extra ArrayList copy
             List<Integer> moves = MoveGen.generateAllLegal(root);
-            if (moves.isEmpty()){
+            if (moves.isEmpty()) {
                 bestScore = Attacks.isInCheck(root, root.whiteToMove()) ? (-SearchConstants.MATE) : 0;
                 bestMove = -1;
-                logIter(depth, bestScore, metrics.nodes - ns, (System.nanoTime()-ds)/1_000_000, -1);
+                logIter(depth, bestScore, metrics.nodes - ns, (System.nanoTime() - ds) / 1_000_000, -1);
                 break;
             }
 
-            // hash move for root
-            long rootKey = rep.get(currentRootPly()); // = seeded length - 1; see seedRepetition
+            long rootKey = rep.get(currentRootPly());
             var pout = new TranspositionTable.ProbeOut();
             int hashMove = tt.probe(rootKey, depth, -SearchConstants.INF, +SearchConstants.INF, pout) ? pout.move : 0;
 
-            // order root: hash first, captures first (no allocations)
             moves.sort((a, b) -> {
                 if (a == hashMove && b != hashMove) return -1;
-                if (b == hashMove && a != hashMove) return  1;
+                if (b == hashMove && a != hashMove) return 1;
                 boolean ac = GameState.isCapture(a), bc = GameState.isCapture(b);
                 return ac == bc ? 0 : (ac ? -1 : 1);
             });
 
-            // --- Aspiration window search at root ---
-            final int WINDOW = 50; // centipawns
+            final int WINDOW = 50;
             int alpha0 = Math.max(-SearchConstants.INF, prevScore - WINDOW);
-            int beta0  = Math.min(+SearchConstants.INF, prevScore + WINDOW);
+            int beta0 = Math.min(+SearchConstants.INF, prevScore + WINDOW);
 
             RootResult rr = searchRootOnce(root, moves, depth, alpha0, beta0, maxDepth, progress);
 
-            // If we failed outside the window, redo with full window
             if (rr.failedLow || rr.failedHigh) {
                 rr = searchRootOnce(root, moves, depth, -SearchConstants.INF, +SearchConstants.INF, maxDepth, progress);
             }
 
-            bestMove  = rr.bestMove;
+            bestMove = rr.bestMove;
             bestScore = rr.bestScore;
             prevScore = bestScore;
 
@@ -173,10 +145,10 @@ public final class NegamaxAB implements SearchAlgorithm {
                 int mi = mateMovesFromScore(bestScore);
                 String side = root.whiteToMove() ? "White" : "Black";
                 ChessBoardPanel.console.logInfo("Forced mate in " + mi + " (" + side + ")");
-                break outer;
+                break;
             }
 
-            logIter(depth, bestScore, metrics.nodes - ns, (System.nanoTime()-ds)/1_000_000, bestMove);
+            logIter(depth, bestScore, metrics.nodes - ns, (System.nanoTime() - ds) / 1_000_000, bestMove);
         }
 
         long totalMs = (System.nanoTime()-t0)/1_000_000;
@@ -194,7 +166,6 @@ public final class NegamaxAB implements SearchAlgorithm {
         return bestMove;
     }
 
-    // One pass of root search with a specific alpha/beta window.
     private RootResult searchRootOnce(GameState root,
                                       List<Integer> moves,
                                       int depth,
@@ -208,7 +179,7 @@ public final class NegamaxAB implements SearchAlgorithm {
 
         int done = 0, total = Math.max(1, moves.size());
 
-        final int rootPly = currentRootPly(); // seeded length - 1
+        final int rootPly = currentRootPly();
         for (int m : moves) {
             GameState.Undo u = undo[rootPly];
             boolean irreversible =
@@ -218,13 +189,11 @@ public final class NegamaxAB implements SearchAlgorithm {
             int childPly = rootPly + 1;
             rep.set(childPly, Zobrist.compute(root));
 
-            // Save floor and bump on irreversible
             int savedFloor = rep.floor();
             if (irreversible) rep.setFloor(childPly);
 
             int sc = -negamax(root, depth - 1, -beta, -alpha, childPly);
 
-            // restore floor and position
             if (irreversible) rep.setFloor(savedFloor);
             root.unmake(u);
 
@@ -234,7 +203,6 @@ public final class NegamaxAB implements SearchAlgorithm {
             }
             if (iterBestScore > alpha) alpha = iterBestScore;
 
-            // progress
             done++;
             if (progress != null) {
                 int coarse = (depth - 1) * 100 / Math.max(1, maxDepth);
@@ -242,7 +210,6 @@ public final class NegamaxAB implements SearchAlgorithm {
                 progress.accept(Math.min(99, coarse + fine));
             }
 
-            // Early break only if it's a WINNING mate for side-to-move
             if (Util.isMateScore(sc) && sc > 0) {
                 int mi = mateMovesFromScore(sc);
                 ChessBoardPanel.console.logInfo("Mate in " + mi + " found at depth " + depth);
@@ -252,7 +219,6 @@ public final class NegamaxAB implements SearchAlgorithm {
             }
 
             if (alpha >= beta) {
-                // fail-high inside aspiration window; caller will decide whether to widen
                 break;
             }
         }
@@ -272,13 +238,11 @@ public final class NegamaxAB implements SearchAlgorithm {
         }
     }
 
-    // Compute "mate in N moves" from your score convention
     private static int mateMovesFromScore(int sc) {
         int matePly = (sc > 0) ? (SearchConstants.MATE - sc) : (SearchConstants.MATE + sc);
         return (matePly + 1) / 2;
     }
 
-    // NEW helper: find a legal move that matches a UCI string (e.g., "e2e4", "e7e8q")
     private int findMoveByUci(GameState s, String uci) {
         var legal = MoveGen.generateAllLegal(s);
         for (int m : legal) {
@@ -290,35 +254,29 @@ public final class NegamaxAB implements SearchAlgorithm {
     private int negamax(GameState s, int depth, int alpha, int beta, int ply){
         metrics.nodes++;
 
-        // Mate-band stabilization
         if (alpha < -SearchConstants.MATE + SearchConstants.MAX_PLY) alpha = -SearchConstants.MATE + SearchConstants.MAX_PLY;
         if (beta  >  SearchConstants.MATE - SearchConstants.MAX_PLY) beta  =  SearchConstants.MATE - SearchConstants.MAX_PLY;
         if (alpha >= beta) return alpha;
 
-        // ensure key
         long key = rep.get(ply);
         if (key == 0L) { key = Zobrist.compute(s); rep.set(ply, key); }
 
         if (rep.isThreefold(ply)) {
             int standPat = eval.evalSTM(s);
-           // System.out.println("DRAWING DETECTED WITH EVAL: " + standPat);
             if (standPat > 0) return +SearchConstants.CONTEMPT;
             if (standPat < 0) return 0;
             return 0;
         }
 
-        // TT (reuse per-ply object; no allocation)
         final TranspositionTable.ProbeOut out = probeOutByPly[ply];
         if (tt.probe(key, depth, alpha, beta, out)) {
             return Util.fromTTScore(out.score, ply);
         }
 
-        // leaf
         if (depth == 0 || ply >= SearchConstants.MAX_PLY) {
             return eval.evalSTM(s);
         }
 
-        // moves — avoid extra ArrayList copy
         List<Integer> moves = MoveGen.generateAllLegal(s);
         if (moves.isEmpty()){
             int score = Attacks.isInCheck(s, s.whiteToMove())
@@ -332,7 +290,6 @@ public final class NegamaxAB implements SearchAlgorithm {
         int hashMove = out.move;
         boolean inCheck = Attacks.isInCheck(s, s.whiteToMove());
 
-        // Keep your orderer; let it permute the List in place.
         orderer.order(s, ply, hashMove, inCheck, moves, depth);
 
         int moveNum = 0;
@@ -349,14 +306,12 @@ public final class NegamaxAB implements SearchAlgorithm {
             int nextPly = ply + 1;
             rep.set(nextPly, Zobrist.compute(s));
 
-            // Save/restore floor; bump on irreversible
             int savedFloor = rep.floor();
             if (irreversible) rep.setFloor(nextPly);
 
             int sc;
             boolean isTactical = isCapture || isPromo;
 
-            // PVS + LMR
             if (moveNum == 1){
                 sc = -negamax(s, depth-1, -beta, -alpha, nextPly);
             } else {
@@ -378,7 +333,6 @@ public final class NegamaxAB implements SearchAlgorithm {
                 }
             }
 
-            // restore floor and position
             if (irreversible) rep.setFloor(savedFloor);
             s.unmake(u);
 
@@ -402,22 +356,15 @@ public final class NegamaxAB implements SearchAlgorithm {
                 depth, Util.scoreStr(score), nodes, ms, Util.rate(nodes, ms), Util.uci(best));
     }
 
-    /* ===========================
-       REPETITION SEEDING
-       =========================== */
 
-    // Tracks how many plies are already present in rep from the root history.
+
     private int seededRootPlies = 0;
 
     private int currentRootPly() {
-        // The current root ply is the last seeded index (0-based).
         return Math.max(0, seededRootPlies - 1);
     }
 
-    /**
-     * Seed rep stack with the root position and optionally the played history,
-     * and set the floor to the ply after the last irreversible move.
-     */
+
     private void seedRepetition(GameState root, List<Integer> history) {
         rep.clearFrom(0);
         GameState cur = root.clone();
@@ -429,9 +376,9 @@ public final class NegamaxAB implements SearchAlgorithm {
         if (history != null) {
             for (int mv : history) {
                 boolean irreversible =
-                        GameState.isCapture(mv) || GameState.moverKind(mv) == 0; // see #2 below
+                        GameState.isCapture(mv) || GameState.moverKind(mv) == 0;
 
-                cur.makeInPlace(mv, /*undo*/ null);
+                cur.makeInPlace(mv,null);
                 rep.set(++ply, Zobrist.compute(cur));
                 if (irreversible) lastIrrevPly = ply;
             }

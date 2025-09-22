@@ -28,7 +28,6 @@ public class EvalBar extends JComponent {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         int w = getWidth(), h = getHeight();
-        // background
         g.setColor(new Color(30, 30, 30, 80));
         g.fillRoundRect(2, 2, w - 4, h - 4, 8, 8);
 

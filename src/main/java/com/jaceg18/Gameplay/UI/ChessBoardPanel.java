@@ -11,8 +11,8 @@ import com.jaceg18.Gameplay.Zobrist;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 
 public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotionListener {
     public static final int BOARD_PX = 720;
@@ -23,7 +23,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     private volatile boolean aiRunning = false;
     private Thread aiThread = null;
 
-    // Models
     private final GameState state = new GameState();
     private final Deque<GameState.Undo> undo = new ArrayDeque<>();
     private final SelectionModel selection = new SelectionModel();
@@ -31,10 +30,8 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     private final PieceSprites sprites = new PieceSprites();
     private final BoardPainter painter = new BoardPainter(this);
 
-    // Console/logging
     public static ConsolePanel console;
 
-    // UI
     private final JProgressBar progress = new JProgressBar(0, 100);
     boolean whiteAtBottom = true;
     private boolean aiPlaysWhite = false;
@@ -70,9 +67,8 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.CTRL_DOWN_MASK), this::probeTB);
 
     }
-    // === Tablebase quick probe (non-blocking; shows result in ConsolePanel) ===
+
     public void probeTB() {
-        // Syzygy: only meaningful up to 7 pieces
         int pieces = Long.bitCount(state.allPieces());
         if (pieces > 7) {
             if (console != null) {
@@ -84,7 +80,7 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
 
         new Thread(() -> {
             try {
-                String fen = FenUtil.toFEN(state);   // use your FEN util
+                String fen = FenUtil.toFEN(state);
                 long zkey = Zobrist.compute(state);
                 var tb = TablebaseClient.probe(zkey, fen);
 
@@ -96,8 +92,8 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
                     }
                     console.setTbInfo(
                             tb.category,
-                            tb.dtm,   // may be null
-                            tb.dtz,   // may be null
+                            tb.dtm,
+                            tb.dtz,
                             tb.bestUci
                     );
 
@@ -145,14 +141,12 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         if (both) startAiTurn();
     }
 
-    // OPTIONAL convenience:
     public void setAiNone() {
         aiPlaysWhite = false;
         aiPlaysBlack = false;
         console.logInfo("AI disabled for both sides.");
     }
 
-    // ===== Painting =====
     @Override protected void paintComponent(Graphics g0) {
         super.paintComponent(g0);
         Graphics2D g = (Graphics2D) g0.create();
@@ -176,7 +170,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
 
 
-    // ===== Mouse =====
     @Override
     public void mousePressed(MouseEvent e) {
         boolean aiTurn = state.whiteToMove() ? aiPlaysWhite : aiPlaysBlack;
@@ -260,7 +253,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
 
 
-    // ===== Moves =====
     private int chooseMove(int from, int to) {
         if (selection.legal.isEmpty()) return -1;
         List<Integer> cand = new ArrayList<>();
@@ -287,15 +279,13 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
 
         console.logMove(state, m);
 
-        // === 1) TERMINAL FIRST: mate / stalemate ===
         if (handleTerminalNow()) {
-            animator.start(null, this::repaint);   // show the last move anim, then stop
+            animator.start(null, this::repaint);
             updateEval(state);
             AudioPlayer.playSound(GameState.isCapture(m));
             return;
         }
 
-        // === 2) Draw rules only if NOT terminal ===
         boolean willDraw = isThreefoldNow() || isFiftyMoveRuleNow() || insufficientMaterialNow();
         Runnable after = willDraw ? null : then;
 
@@ -318,7 +308,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     void undoMove() {
         if (undo.isEmpty()) return;
 
-        // stop AI if thinking
         if (aiRunning) {
             aiRunning = false;
             if (aiThread != null) aiThread.interrupt();
@@ -350,17 +339,14 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
 
     private boolean handleTerminalNow() {
-        // side to move is the opponent of the mover we just applied
         java.util.List<Integer> legal = MoveGen.generateAllLegal(state);
         if (!legal.isEmpty()) return false;
 
         boolean inCheck = com.jaceg18.Gameplay.Utility.Attacks.isInCheck(state, state.whiteToMove());
         if (inCheck) {
-            // Checkmate: winner is the side that just moved
             boolean winnerWhite = !state.whiteToMove();
             declareMate(winnerWhite);
         } else {
-            // Stalemate is a draw (but mate beats any draw)
             declareDraw("stalemate");
         }
         return true;
@@ -368,7 +354,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
 
     private void declareMate(boolean winnerWhite) {
         gameOver = true;
-        // stop any thinking/animations
         if (aiRunning && aiThread != null) aiThread.interrupt();
         aiRunning = false;
 
@@ -376,8 +361,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         progress.setIndeterminate(false);
         progress.setValue(0);
         progress.setString(null);
-
-        // If you allow AI-vs-AI, freeze both toggles
         aiPlaysWhite = false;
         aiPlaysBlack = false;
 
@@ -385,7 +368,7 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         repaint();
     }
 
-    // ===== AI turn =====
+
     private void startAiTurn() {
         if (ai == null || gameOver) return;
         if (aiRunning) return;
@@ -393,9 +376,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         boolean aiTurn = state.whiteToMove() ? aiPlaysWhite : aiPlaysBlack;
 
         if (!aiTurn) return;
-
-
-
         aiRunning = true;
 
         GameState snap = state.copy();
@@ -438,7 +418,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
 
 
-    // ===== Helpers =====
     private boolean isOwnPiece(int sq) {
         long own = state.whiteToMove() ? state.whitePieces() : state.blackPieces();
         return ((own >>> sq) & 1L) != 0L;
@@ -454,10 +433,9 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
     void adjustDepth(int d) { if (ai != null) { ai.setMaxDepth(Math.max(1, ai.getMaxDepth() + d)); console.logInfo("Max depth: " + ai.getMaxDepth()); } }
 
-    // call once at startup and whenever you reset the board
     private void initGameCounters() {
         posCounts.clear();
-        addPosCount(); // count the initial position
+        addPosCount();
         gameOver = false;
     }
 
@@ -465,7 +443,6 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     private void declareDraw(String reason) {
         gameOver = true;
 
-        // stop any thinking/animations
         if (aiRunning && aiThread != null) aiThread.interrupt();
         aiRunning = false;
         progress.setVisible(false);
@@ -498,11 +475,10 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
 
     private boolean isFiftyMoveRuleNow() {
-        return state.halfmoveClock() >= 100; // 100 plies = 50 moves
+        return state.halfmoveClock() >= 100;
     }
 
     private boolean insufficientMaterialNow() {
-        // quick & practical: K vs K / K+B vs K / K+N vs K / K+N vs K+N (same color bishops optional)
         long wP=state.pawns(true), bP=state.pawns(false);
         if ((wP|bP) != 0) return false;
 
@@ -512,9 +488,9 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         if ((wR|bR) != 0) return false;
 
         int minors = Long.bitCount(wN|wB) + Long.bitCount(bN|bB);
-        if (minors == 0) return true;           // K vs K
-        if (minors == 1) return true;           // K+B vs K or K+N vs K
-        if (minors == 2 && (wN!=0 && bN!=0) && wB==0 && bB==0) return true; // K+N vs K+N
+        if (minors == 0) return true;
+        if (minors == 1) return true;
+        if (minors == 2 && (wN!=0 && bN!=0) && wB==0 && bB==0) return true;
         return false;
     }
 

@@ -5,9 +5,7 @@ import javax.swing.*;
 import java.awt.*;
 
 class MoveAnimator {
-    // drag
     int draggingFrom = -1; Point dragPoint; Image dragImg; int dragOffX, dragOffY;
-    // move anim
     private boolean animating; long start; int fromSq = -1, toSq = -1; Image animImg; final Timer timer;
     private static final int ANIM_MS = 200;
     private final JComponent repainter;

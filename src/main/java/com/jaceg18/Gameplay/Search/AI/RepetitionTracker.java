@@ -1,6 +1,6 @@
 package com.jaceg18.Gameplay.Search.AI;
 public final class RepetitionTracker {
-    private final long[] repStack = new long[SearchConstants.MAX_PLY + 64]; // a little headroom
+    private final long[] repStack = new long[SearchConstants.MAX_PLY + 64];
     private int floorPly = 0;
 
     public long get(int ply) { return repStack[ply]; }

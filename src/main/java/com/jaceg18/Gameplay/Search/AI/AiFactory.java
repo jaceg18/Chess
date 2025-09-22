@@ -12,7 +12,7 @@ import java.util.function.IntConsumer;
 
 public class AiFactory {
     public static SearchEngine balanced() {
-        var tt = new ArrayTranspositionTable(1 << 20); // ~1M entries
+        var tt = new ArrayTranspositionTable(1 << 20);
         var orderer = new DefaultMoveOrderer();
         var rep = new RepetitionTracker();
         var eval = new EvaluationStrategy.Default();

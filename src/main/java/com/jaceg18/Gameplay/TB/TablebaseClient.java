@@ -6,21 +6,15 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Minimal client for the Lichess 7-man tablebase API.
- * No external deps. Caches by Zobrist key to avoid repeat calls.
- *
- * API docs (fields: dtm, dtz, moves[0].uci, category): https://github.com/lichess-org/lila-tablebase
- */
 public final class TablebaseClient {
 
     public static final class TbResult {
-        public final String bestUci;      // first move in "moves" array (best)
-        public final Integer dtm;         // depth to mate (plies), may be null
-        public final Integer dtz;         // DTZ50'' (plies), may be null
-        public final String category;     // "win", "draw", "loss", etc.
-        public final boolean checkmate;   // true if current side to move is mated
-        public final boolean stalemate;   // true if stalemate
+        public final String bestUci;
+        public final Integer dtm;
+        public final Integer dtz;
+        public final String category;
+        public final boolean checkmate;
+        public final boolean stalemate;
 
         TbResult(String bestUci, Integer dtm, Integer dtz, String category, boolean checkmate, boolean stalemate) {
             this.bestUci = bestUci;
@@ -36,17 +30,14 @@ public final class TablebaseClient {
     }
 
     private static final String ENDPOINT = "https://tablebase.lichess.ovh/standard?fen=";
-    private static final int TIMEOUT_MS = 1200; // keep it snappy for GUI
+    private static final int TIMEOUT_MS = 1200;
     private static final ConcurrentHashMap<Long, TbResult> CACHE = new ConcurrentHashMap<>();
 
     private TablebaseClient() {}
 
     public static TbResult probe(long zobrist, String fen) {
-        // Cache hit?
         TbResult cached = CACHE.get(zobrist);
         if (cached != null) return cached;
-
-        // Lichess accepts underscores instead of spaces. That avoids over-encoding.
         String fenParam = fen.replace(' ', '_');
         String urlStr = ENDPOINT + fenParam;
 
@@ -71,21 +62,16 @@ public final class TablebaseClient {
             if (out != null) CACHE.putIfAbsent(zobrist, out);
             return out;
         } catch (Exception ignore) {
-            return null; // silent fall back to search
+            return null;
         } finally {
             if (conn != null) conn.disconnect();
         }
     }
 
-    // Super-light, resilient parsing for the handful of fields we need.
     private static TbResult parse(String json) {
-        // category
         String category = strField(json, "\"category\":\"");
-        // dtm, dtz
         Integer dtm = intField(json, "\"dtm\":");
         Integer dtz = intField(json, "\"dtz\":");
-
-        // top move uci (first item of moves array if present)
         String bestUci = null;
         int mIdx = json.indexOf("\"moves\"");
         if (mIdx >= 0) {
@@ -95,9 +81,6 @@ public final class TablebaseClient {
 
         boolean checkmate = boolField(json, "\"checkmate\":");
         boolean stalemate = boolField(json, "\"stalemate\":");
-
-        // When the tablebase doesn't know (too many pieces, castling rights, etc.),
-        // category might be missing or "unknown" and there may be no moves.
         if (category == null && bestUci == null && dtm == null && dtz == null) return null;
 
         return new TbResult(bestUci, dtm, dtz, category == null ? "unknown" : category, checkmate, stalemate);
@@ -118,12 +101,11 @@ public final class TablebaseClient {
         int i = json.indexOf(key);
         if (i < 0) return null;
         int j = i + key.length();
-        // allow negative and null
         int k = j;
         while (k < json.length()) {
             char c = json.charAt(k);
             if ((c >= '0' && c <= '9') || c == '-') { k++; continue; }
-            if (c == 'n') { // "null"
+            if (c == 'n') {
                 return null;
             }
             break;

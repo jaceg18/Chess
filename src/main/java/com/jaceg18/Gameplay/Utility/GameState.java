@@ -8,54 +8,42 @@ public final class GameState {
         return new GameState(this);
     }
 
-    // ---------- side / rights / clocks ----------
     private boolean whiteToMove = true;
-    // castling rights bitmask: 1=WK, 2=WQ, 4=BK, 8=BQ
     private int castlingRights = 0b1111;
-    // en-passant target square (0..63) or -1 if none
     private int epSquare = -1;
     private int halfmoveClock = 0;
     public int fullmoveNumber = 1;
 
-    // ---------- per-piece bitboards (colored) ----------
-    // White
     private long WP, WN, WB, WR, WQ, WK;
-    // Black
     private long BP, BN, BB, BR, BQ, BK;
 
-    // ---------- cached aggregates ----------
     private long whitePieces, blackPieces, allPieces;
 
-    // ---------- move encoding ----------
-    // bits: 0..5 to, 6..11 from, 12..14 promo(0=N,1=B,2=R,3=Q), 15 cap, 16 ep, 17 castle, 18 dblPush, 19..21 mover(0=P,1=N,2=B,3=R,4=Q,5=K)
     public static final int FLAG_CAPTURE = 1<<15;
     public static final int FLAG_EP      = 1<<16;
     public static final int FLAG_CASTLE  = 1<<17;
     public static final int FLAG_DBL     = 1<<18;
 
-    public static int move(int from,int to,int moverKind,int flags,int promo /*-1 or 0..3*/){
+    public static int move(int from,int to,int moverKind,int flags,int promo){
         int m = to | (from<<6) | (moverKind<<19) | flags;
-        if (promo >= 0) m |= ((promo + 1) << 12);   // store 1..4 ; 0 means "no promo"
+        if (promo >= 0) m |= ((promo + 1) << 12);
         return m;
     }
 
     public static int promoKind(int m){
-        int k = (m >>> 12) & 7;                     // 0=no promo, 1..4 = N,B,R,Q
-        return (k == 0) ? -1 : (k - 1);             // back to 0..3 or -1
+        int k = (m >>> 12) & 7;
+        return (k == 0) ? -1 : (k - 1);
     }
 
     public static boolean isPromotion(int m){ return promoKind(m) >= 0; }
     public static int from(int m){ return (m>>>6)&63; }
     public static int to(int m){ return m&63; }
-    public static int moverKind(int m){ return (m>>>19)&7; }  // 0=P,1=N,2=B,3=R,4=Q,5=K
+    public static int moverKind(int m){ return (m>>>19)&7; }
     public static boolean isCapture(int m){ return (m & FLAG_CAPTURE)!=0; }
     public static boolean isEP(int m){ return (m & FLAG_EP)!=0; }
     public static boolean isCastle(int m){ return (m & FLAG_CASTLE)!=0; }
     public static boolean isDoublePawn(int m){ return (m & FLAG_DBL)!=0; }
 
-    // ---------- undo record ----------
-// ---------- undo record (REPLACE your current one) ----------
-    // ---------- undo record (mutable + both APIs) ----------
     public static final class Undo {
         int move;
         public int castlingRights;
@@ -67,7 +55,6 @@ public final class GameState {
         public Undo() {}
 
 
-        // keep old constructor so code like `new Undo(m, this)` compiles
         public Undo(int move, GameState s) { captureFrom(s, move); }
 
         void captureFrom(GameState s, int move){
@@ -82,9 +69,8 @@ public final class GameState {
     }
 
 
-    // ---------- make (non-allocating, for search) ----------
     public void makeInPlace(int m, Undo u){
-        u.captureFrom(this, m);   // snapshot without allocating a new Undo
+        u.captureFrom(this, m);
         final boolean white = whiteToMove;
         final int f = from(m), t = to(m);
         long fromMask = 1L<<f, toMask = 1L<<t;
@@ -144,7 +130,6 @@ public final class GameState {
     }
 
 
-    // ---------- construction ----------
     public GameState() { setToStartpos(); }
 
     public GameState(GameState o){
@@ -186,7 +171,7 @@ public final class GameState {
         recomputeAggregates();
     }
 
-    // ---------- queries ----------
+
     public boolean whiteToMove(){ return whiteToMove; }
     public int epSquare(){ return epSquare; }
     public int castlingRights(){ return castlingRights; }
@@ -201,21 +186,17 @@ public final class GameState {
     public long queens(boolean white){ return white ? WQ : BQ; }
     public long king(boolean white){ return white ? WK : BK; }
 
-    // ---------- make / unmake ----------
-    // ---------- make (returns an Undo snapshot, like before) ----------
     public Undo make(int m){
-        Undo u = new Undo(m, this);   // works again
+        Undo u = new Undo(m, this);
 
         final boolean white = whiteToMove;
         final int f = from(m), t = to(m);
         long fromMask = 1L<<f, toMask = 1L<<t;
 
-        // clear ep by default
         epSquare = -1;
 
-        // mover piece switch (by kind) — same logic you already had
         switch (moverKind(m)) {
-            case 0 -> { // pawn
+            case 0 -> {
                 if (white) { WP ^= fromMask ^ toMask; }
                 else       { BP ^= fromMask ^ toMask; }
 
@@ -230,14 +211,13 @@ public final class GameState {
                     captureAtSquare(t, !white);
                     halfmoveClock = 0;
                 } else {
-                    halfmoveClock = 0; // pawn move resets
+                    halfmoveClock = 0;
                 }
 
                 int promo = promoKind(m);
                 if (promo >= 0) {
-                    // remove pawn at 't' and place promoted piece
                     if (white) WP &= ~toMask; else BP &= ~toMask;
-                    promoteAtSquare(t, white, promo); // 0=N,1=B,2=R,3=Q
+                    promoteAtSquare(t, white, promo);
                 }
             }
             case 1 -> { if (white) WN ^= fromMask ^ toMask; else BN ^= fromMask ^ toMask; resetHMIfCapture(m, white, t); }
@@ -247,41 +227,37 @@ public final class GameState {
             case 5 -> {
                 if (white) {
                     WK ^= fromMask ^ toMask;
-                    // lose white castling rights
                     castlingRights &= ~(1|2);
                 } else {
                     BK ^= fromMask ^ toMask;
                     castlingRights &= ~(4|8);
                 }
                 if (isCapture(m)) { captureAtSquare(t, !white); halfmoveClock = 0; }
-                // castling rook move
                 if (isCastle(m)) {
                     int ff = f & 7, tt = t & 7;
                     boolean kingSide = (tt > ff);
                     if (white) {
-                        if (kingSide) { // e1->g1; rook h1->f1
+                        if (kingSide) {
                             WR ^= (BitUtility.maskFor("h1") ^ BitUtility.maskFor("f1"));
-                        } else {        // e1->c1; rook a1->d1
+                        } else {
                             WR ^= (BitUtility.maskFor("a1") ^ BitUtility.maskFor("d1"));
                         }
                     } else {
-                        if (kingSide) { // e8->g8; rook h8->f8
+                        if (kingSide) {
                             BR ^= (BitUtility.maskFor("h8") ^ BitUtility.maskFor("f8"));
-                        } else {        // e8->c8; rook a8->d8
+                        } else {
                             BR ^= (BitUtility.maskFor("a8") ^ BitUtility.maskFor("d8"));
                         }
                     }
-                    halfmoveClock++; // castle is a non-capture non-pawn move
+                    halfmoveClock++;
                 } else {
-                    halfmoveClock++; // non-capture, non-pawn
+                    halfmoveClock++;
                 }
             }
         }
 
-        // update castling rights if a rook moved or was captured from its initial square
         updateCastlingRightsOnRookMoveOrCapture(f, t);
 
-        // flip side, move number
         whiteToMove = !whiteToMove;
         if (!whiteToMove) fullmoveNumber++;
 
@@ -291,7 +267,6 @@ public final class GameState {
 
 
     public void unmake(Undo u){
-        // restore exact prior snapshot
         this.castlingRights = u.castlingRights;
         this.epSquare = u.epSquare;
         this.halfmoveClock = u.halfmoveClock;
@@ -303,7 +278,6 @@ public final class GameState {
         recomputeAggregates();
     }
 
-    // ---------- helpers ----------
     private void recomputeAggregates() {
         whitePieces = WP | WN | WB | WR | WQ | WK;
         blackPieces = BP | BN | BB | BR | BQ | BK;
@@ -313,7 +287,6 @@ public final class GameState {
     private void captureAtSquare(int sq, boolean whiteCaptured) {
         long m = 1L<<sq;
         if (whiteCaptured) {
-            // remove a white piece at sq
             if ((WP & m)!=0) { WP &= ~m; castlingRights &= updateRightsByCapture("white", sq); return; }
             if ((WN & m)!=0) { WN &= ~m; return; }
             if ((WB & m)!=0) { WB &= ~m; return; }
@@ -333,7 +306,7 @@ public final class GameState {
     }
 
 
-    public int halfmoveClock(){ return halfmoveClock; }  // add this tiny getter
+    public int halfmoveClock(){ return halfmoveClock; }
 
     private void resetHMIfCapture(int m, boolean whiteMover, int toSq){
         if (isCapture(m)) { captureAtSquare(toSq, !whiteMover); halfmoveClock = 0; }
@@ -342,7 +315,6 @@ public final class GameState {
 
     private void promoteAtSquare(int sq, boolean white, int promo) {
         long m = 1L<<sq;
-        // promo: 0=N,1=B,2=R,3=Q
         if (white) {
             switch (promo) {
                 case 0 -> WN |= m;
@@ -360,9 +332,8 @@ public final class GameState {
         }
     }
 
-    // clear rights if a rook moves/captured from its start square
+
     private void updateCastlingRightsOnRookMoveOrCapture(int fromSq, int toSq){
-        // a1 (white Q-side rook)
         if (fromSq == BitUtility.squareIndexOf("a1") || toSq == BitUtility.squareIndexOf("a1"))
             castlingRights &= ~0b0010;
         if (fromSq == BitUtility.squareIndexOf("h1") || toSq == BitUtility.squareIndexOf("h1"))

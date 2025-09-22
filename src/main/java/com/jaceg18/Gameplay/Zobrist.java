@@ -3,22 +3,13 @@ package com.jaceg18.Gameplay;
 import com.jaceg18.Gameplay.Utility.BitUtility;
 import com.jaceg18.Gameplay.Utility.GameState;
 
-/**
- * Zobrist hashing that works with GameState's public getters.
- * - Hashes piece-square occupancy via getters (no direct WP/WN fields).
- * - Hashes castling rights (0..15), side-to-move.
- * - Hashes EP *file* only if an EP capture is legal this ply.
- */
 public final class Zobrist {
     private Zobrist() {}
 
 
     private static final long[][] PSQ = new long[12][64];
-    // castling 0..15
     private static final long[] CASTLING = new long[16];
-    // ep file 0..7
     private static final long[] EP_FILE = new long[8];
-    // side to move
     private static final long SIDE = rnd();
 
     static {
@@ -53,16 +44,12 @@ public final class Zobrist {
 
     public static long compute(GameState s) {
         long[] kbox = new long[1];
-
-        // white pieces
         xorPieces(s.pawns(true), 0, kbox);
         xorPieces(s.knights(true), 1, kbox);
         xorPieces(s.bishops(true), 2, kbox);
         xorPieces(s.rooks(true), 3, kbox);
         xorPieces(s.queens(true), 4, kbox);
         xorPieces(s.king(true), 5, kbox);
-
-        // black pieces
         xorPieces(s.pawns(false), 6, kbox);
         xorPieces(s.knights(false), 7, kbox);
         xorPieces(s.bishops(false), 8, kbox);

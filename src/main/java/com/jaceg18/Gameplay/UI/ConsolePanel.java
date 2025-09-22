@@ -19,7 +19,6 @@ public class ConsolePanel extends JPanel {
     private final EvalBar evalBar = new EvalBar();
     private final ChessBoardPanel board;
 
-    // --- TB UI (compact info strip) ---
     private final JLabel tbBest   = new JLabel("—");
     private final JLabel tbDTM    = new JLabel("—");
     private final JLabel tbDTZ    = new JLabel("—");
@@ -133,8 +132,6 @@ public class ConsolePanel extends JPanel {
         tbDTM.setText(dtm != null ? dtm.toString() : "—");
         tbDTZ.setText(dtz != null ? dtz.toString() : "—");
         tbStatus.setText(category != null ? category : "unknown");
-
-        // simple tint by status
         Color c = Color.DARK_GRAY;
         if ("win".equalsIgnoreCase(category))  c = new Color(0,128,0);
         if ("draw".equalsIgnoreCase(category)) c = new Color(80,80,80);

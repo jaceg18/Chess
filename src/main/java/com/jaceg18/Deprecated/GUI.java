@@ -1,8 +1,8 @@
 package com.jaceg18.Deprecated;
 
 
-import com.jaceg18.Gameplay.Search.AI.AiFactory;
 import com.jaceg18.Gameplay.Opening.OpeningBook;
+import com.jaceg18.Gameplay.Search.AI.AiFactory;
 import com.jaceg18.Gameplay.UI.AudioPlayer;
 import com.jaceg18.Gameplay.Utility.Attacks;
 import com.jaceg18.Gameplay.Utility.GameState;
@@ -10,26 +10,19 @@ import com.jaceg18.Gameplay.Utility.MoveGen;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
-import javax.swing.Timer;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
-
-/**
- * Refactored, modular Swing chess GUI.
- *  - Strategy: AiProvider interface; any engine strategy can plug in.
- *  - Factory: AiFactory selects concrete SearchEngine/params.
- *  - Single-responsibility helpers: BoardPainter, PieceSprites, MoveAnimator, SelectionModel.
- *  - Shorter + readable: cohesive methods, var, lambdas, minimal state on GUI.
- */
+import java.util.function.IntConsumer;
 
 @Deprecated
 public class GUI extends JPanel implements MouseListener, MouseMotionListener {
 
-    // ===== Theme / Dimensions =====
     public static final int BOARD_PX = 640;
     private static final Color LIGHT_SQ = new Color(240, 217, 181);
     private static final Color DARK_SQ  = new Color(181, 136, 99);
@@ -39,15 +32,13 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
     private static final Color CHECK    = new Color(220, 20, 60, 120);
     private static final Stroke DASH    = new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[]{6f, 6f}, 0f);
 
-    // ===== Strategy (pluggable AI) =====
     public interface AiProvider {
         int pickMove(GameState snapshot);
         void setMaxDepth(int maxDepth);
         int getMaxDepth();
-        default void setProgressCallback(java.util.function.IntConsumer cb) {}
+        default void setProgressCallback(IntConsumer cb) {}
     }
 
-    // ===== Core models =====
     private final GameState state = new GameState();
     private final Deque<GameState.Undo> undo = new ArrayDeque<>();
     private final SelectionModel sel = new SelectionModel();
@@ -55,7 +46,6 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
     private final PieceSprites sprites = new PieceSprites();
     private final BoardPainter painter = new BoardPainter();
 
-    // Interaction / UI
     private final JProgressBar progress = new JProgressBar(0, 100);
     private boolean whiteAtBottom = true;
     private boolean aiPlaysWhite = false;
@@ -81,17 +71,12 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
             var book = OpeningBook.load("src/main/resources/openings.txt");
             engine.setOpeningBook(book);
         } catch (IOException ignore) { System.err.println("Opening book not found"); }
-        //setAi(engine);
-
-        // Keybinds
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_DOWN_MASK), this::undoMove);
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.CTRL_DOWN_MASK), () -> adjustDepth(+1));
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.CTRL_DOWN_MASK), () -> adjustDepth(-1));
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_F, 0), () -> { whiteAtBottom = !whiteAtBottom; repaint(); });
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK), () -> setAiPlaysWhite(true));
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_B, InputEvent.CTRL_DOWN_MASK), () -> setAiPlaysWhite(false));
-
-        // If AI opens as White
         if (aiPlaysWhite && state.whiteToMove()) startAiTurn();
     }
 
@@ -101,7 +86,6 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
         if (ai != null && state.whiteToMove() == aiPlaysWhite) startAiTurn();
     }
 
-    // ===== Painting =====
     @Override protected void paintComponent(Graphics g0) {
         super.paintComponent(g0);
         var g = (Graphics2D) g0.create();
@@ -122,9 +106,7 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
         g.dispose();
     }
 
-    // ===== Mouse =====
     @Override public void mousePressed(MouseEvent e) {
-      // if (state.whiteToMove() == aiPlaysWhite || animator.isAnimating()) return;
         requestFocusInWindow();
         var S = squareSize();
         var sq = boardSq(e.getY() / S, e.getX() / S);
@@ -162,18 +144,15 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
     @Override public void mouseEntered(MouseEvent e) {}
     @Override public void mouseClicked(MouseEvent e) {}
 
-    // ===== Selection & Moves =====
     private int chooseMove(int from, int to) {
         if (sel.legal.isEmpty()) return -1;
         List<Integer> cand = new ArrayList<>();
         for (var m : sel.legal) if (GameState.from(m) == from && GameState.to(m) == to) cand.add(m);
         if (cand.isEmpty()) return -1;
         if (cand.size() == 1 && !GameState.isPromotion(cand.get(0))) return cand.get(0);
-
-        // promotion
         int want = Promotion.ask(this);
         for (var m : cand) if (GameState.promoKind(m) == want) return m;
-        for (var m : cand) if (GameState.promoKind(m) == 3) return m; // default Queen
+        for (var m : cand) if (GameState.promoKind(m) == 3) return m;
         return cand.getFirst();
     }
 
@@ -198,7 +177,6 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
         repaint();
     }
 
-    // ===== AI =====
     private void startAiTurn() {
         if (ai == null || state.whiteToMove() != aiPlaysWhite) return;
         var snap = state.copy();
@@ -214,7 +192,6 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
         }, "AI").start();
     }
 
-    // ===== Helpers =====
     private boolean isOwnPiece(int sq) {
         long own = state.whiteToMove() ? state.whitePieces() : state.blackPieces();
         return ((own >>> sq) & 1L) != 0L;
@@ -239,7 +216,6 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
     }
     private void adjustDepth(int d) { if (ai != null) { ai.setMaxDepth(Math.max(1, ai.getMaxDepth() + d)); System.out.println("Max depth: " + ai.getMaxDepth()); } }
 
-    // ===== Nested helpers =====
     private final class BoardPainter {
         int hoverSq = -1;
         void drawBoard(Graphics2D g, int S) {
@@ -316,9 +292,7 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
     }
 
     private final class MoveAnimator {
-        // drag
         int draggingFrom = -1; Point dragPoint; Image dragImg; int dragOffX, dragOffY;
-        // move anim
         boolean animating; long start; int fromSq = -1, toSq = -1; Image animImg; final Timer timer;
         private static final int ANIM_MS = 180;
         MoveAnimator() { timer = new Timer(1000 / 165, e -> tick((Timer) e.getSource())); }
@@ -327,7 +301,7 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
                 start = System.currentTimeMillis(); animating = true;
                 timer.addActionListener(new AbstractAction() { @Override public void actionPerformed(ActionEvent e) {}});
                 timer.start();
-                new javax.swing.Timer(ANIM_MS, e -> { animating = false; timer.stop(); repaint.run(); if (after != null) after.run(); }).start();
+                new Timer(ANIM_MS, e -> { animating = false; timer.stop(); repaint.run(); if (after != null) after.run(); }).start();
             } else { repaint.run(); if (after != null) after.run(); }
         }
         void preparePieceOverlay(int from, int to, Image img) { fromSq = from; toSq = to; animImg = img; }
@@ -335,7 +309,7 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
         void drawAnimatingPiece(Graphics2D g, int S) {
             if (!animating || animImg == null) return;
             double t = Math.min(1.0, (System.currentTimeMillis() - start) / (double) ANIM_MS);
-            t = 1 - Math.pow(1 - t, 3); // easeOutCubic
+            t = 1 - Math.pow(1 - t, 3);
             Point a = sqCenter(fromSq, S), b = sqCenter(toSq, S);
             int x = (int) Math.round(lerp(a.x - S / 2, b.x - S / 2, t));
             int y = (int) Math.round(lerp(a.y - S / 2, b.y - S / 2, t));
@@ -347,7 +321,6 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
             if (isDragging()) m &= ~(1L << draggingFrom);
             return m;
         }
-        // drag
         void startDragIfPiece(MouseEvent e, int fromSq, int S) {
             draggingFrom = fromSq;
             dragImg = sprites.imageAt(state, fromSq, S);
@@ -394,18 +367,16 @@ public class GUI extends JPanel implements MouseListener, MouseMotionListener {
     }
 
     private static final class Promotion {
-        /** return 0..3 mapped to GameState.promoKind(): 0=Knight,1=Bishop,2=Rook,3=Queen */
         static int ask(Component parent) {
             Object[] o = {"Queen", "Rook", "Bishop", "Knight"};
             int c = JOptionPane.showOptionDialog(parent, "Promote to:", "Promotion", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, o, o[0]);
-            if (c == 3) return 0; // Knight
-            if (c == 2) return 1; // Bishop
-            if (c == 1) return 2; // Rook
-            return 3;             // Queen
+            if (c == 3) return 0;
+            if (c == 2) return 1;
+            if (c == 1) return 2;
+            return 3;
         }
     }
 
-    // ===== Small math helpers =====
     private static double lerp(double a, double b, double t) { return a + (b - a) * t; }
     private Point sqCenter(int sq, int S) { var rc = viewRC(sq); return new Point(rc[1] * S + S / 2, rc[0] * S + S / 2); }
 }

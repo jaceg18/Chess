@@ -11,7 +11,6 @@ class BoardPainter {
     BoardPainter(ChessBoardPanel host) { this.host = host; }
 
     void drawBoard(Graphics2D g, int S, boolean whiteBottom) {
-        // wood gradient
         for (int r = 0; r < 8; r++) for (int c = 0; c < 8; c++) {
             boolean light = ((r + c) & 1) == 0;
             Color base = light ? Theme.LIGHT_SQ : Theme.DARK_SQ;
@@ -19,7 +18,6 @@ class BoardPainter {
             Paint p = new GradientPaint(c * S, r * S, base, (c + 1) * S, (r + 1) * S, edge);
             g.setPaint(p); g.fillRect(c * S, r * S, S, S);
         }
-        // subtle border
         g.setColor(Theme.BOARD_BORDER);
         g.setStroke(new BasicStroke(2f));
         g.drawRect(0, 0, S * 8 - 1, S * 8 - 1);

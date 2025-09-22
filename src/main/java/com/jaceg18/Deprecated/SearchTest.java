@@ -1,9 +1,8 @@
 package com.jaceg18.Deprecated;
 
-import com.jaceg18.Gameplay.Search.AI.Evaluation.Eval;
 import com.jaceg18.Gameplay.Opening.OpeningBook;
-
 import com.jaceg18.Gameplay.Search.AI.AiProvider;
+import com.jaceg18.Gameplay.Search.AI.Evaluation.Eval;
 import com.jaceg18.Gameplay.Utility.Attacks;
 import com.jaceg18.Gameplay.Utility.GameState;
 import com.jaceg18.Gameplay.Utility.MoveGen;
@@ -11,21 +10,19 @@ import com.jaceg18.Gameplay.Zobrist;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntConsumer;
 
 @Deprecated
 public class SearchTest implements AiProvider {
 
-    // ---- knobs ----
     private static final int INF = 1_000_000_000;
     private static final int MAX_PLY = 128;
 
-    // ---- mate / eval bands ----
-    private static final int MATE = 30_000;   // big but finite; all real evals must be << WIN
+    private static final int MATE = 30_000;
     private static final int WIN  = 10_000;
 
-    // Heuristics
-    private final int[][] killers = new int[MAX_PLY][2];       // 2 killers per ply
-    private final int[][] history = new int[2][64 * 64];       // side-to-move x (from<<6 | to)
+    private final int[][] killers = new int[MAX_PLY][2];
+    private final int[][] history = new int[2][64 * 64];
 
     private static boolean quiet(int m){
         return !GameState.isCapture(m) && GameState.promoKind(m) < 0;
@@ -40,60 +37,45 @@ public class SearchTest implements AiProvider {
         }
     }
 
-    // progress callback
-    private java.util.function.IntConsumer progress = null;
+    private IntConsumer progress = null;
     @Override public void setProgressCallback(java.util.function.IntConsumer cb){ this.progress = cb; }
     private void report(int pct){ if (progress != null) progress.accept(Math.max(0, Math.min(100, pct))); }
 
-    // opening book
     private OpeningBook book;
     public void setOpeningBook(OpeningBook b){ book = b; }
 
-    // search depth control
     private int maxDepth;
     public SearchTest(int d){ maxDepth = d; }
     @Override public void setMaxDepth(int d){ maxDepth = d; }
     @Override public int getMaxDepth(){ return maxDepth; }
 
-    // instrumentation + reusable undo buffers
     private long nodes;
     private final GameState.Undo[] undo = new GameState.Undo[MAX_PLY];
     { for (int i=0;i<undo.length;i++) undo[i] = new GameState.Undo(); }
 
-    // simple TT (fixed size, always-on)
-    private final TT tt = new TT(1 << 20); // ~1M entries; tune as needed
+    private final TT tt = new TT(1 << 20);
     private int ttAge = 0;
 
-    // --- path-dependent repetition tracking (local to search) ---
-    // repStack[ply] holds the Zobrist key for the node at that ply.
     private final long[] repStack = new long[MAX_PLY];
 
     @Override public int pickMove(GameState s){ return computeBestMove(s); }
 
     public int computeBestMove(GameState root){
         report(0);
-
-        // 1) Opening book first
         if (book != null){
             int bm = book.pick(root);
             if (bm != 0){ System.out.println("[book] " + uci(bm)); report(100); return bm; }
         }
-
-        // 2) Iterative deepening over negamax(alpha-beta)
         int bestMove = -1, bestScore = -INF;
         nodes = 0;
         ttAge++;
         long t0 = System.nanoTime();
         System.out.println("=== Search start (negamax+ab+TT) ===");
-
-        // init repetition stack root key
         repStack[0] = Zobrist.compute(root);
 
         for (int depth = 1; depth <= maxDepth; depth++){
             long ds = System.nanoTime();
             long ns = nodes;
-
-            // Root move list
             List<Integer> moves = new ArrayList<>(MoveGen.generateAllLegal(root));
             if (moves.isEmpty()){
                 bestScore = Attacks.isInCheck(root, root.whiteToMove()) ? (-MATE + 0) : 0;
@@ -104,9 +86,7 @@ public class SearchTest implements AiProvider {
                         depth, scoreStr(bestScore), nd, ms, rate(nd, ms));
                 break;
             }
-
-            // Hash move ordering (if any), then captures-first fallback
-            long rootKey = repStack[0]; // already computed
+            long rootKey = repStack[0];
             TT.TTOut out = new TT.TTOut();
             int hashMove;
             if (tt.probe(rootKey, depth, -INF, +INF, out)) hashMove = out.move;
@@ -130,8 +110,6 @@ public class SearchTest implements AiProvider {
             for (int m : moves){
                 GameState.Undo u = undo[0];
                 root.makeInPlace(m, u);
-
-                // push child key into repStack before search
                 repStack[1] = Zobrist.compute(root);
 
                 int sc = -negamax(root, depth-1, -INF, +INF, 1);
@@ -152,17 +130,13 @@ public class SearchTest implements AiProvider {
 
             bestMove = iterBestMove;
             bestScore = iterBestScore;
-
-            // Store root result as EXACT to seed next iteration ordering
-            tt.store(rootKey, depth, TT.EXACT, toTTScore(bestScore, /*ply=*/0), bestMove, ttAge);
+            tt.store(rootKey, depth, TT.EXACT, toTTScore(bestScore, 0), bestMove, ttAge);
 
             long ms = (System.nanoTime()-ds)/1_000_000, nd = nodes - ns;
             System.out.printf("Depth %2d: score=%s  nodes=%,d  time=%d ms  nps=%,d  best=%s%n",
                     depth, scoreStr(bestScore), nd, ms, rate(nd, ms), uci(bestMove));
 
             report((depth * 100) / Math.max(1, maxDepth));
-
-            // Optional: stop if we already have a forced mate (saves time, avoids “geeking out”)
             if (isMateScore(bestScore)) break;
         }
 
@@ -174,21 +148,12 @@ public class SearchTest implements AiProvider {
     }
 
 
-    // ---------------- core negamax (no qsearch, no extensions) ----------------
     private int negamax(GameState s, int depth, int alpha, int beta, int ply){
         nodes++;
-
-        // Mate-band window clipping (stability)
         if (alpha < -MATE + MAX_PLY) alpha = -MATE + MAX_PLY;
         if (beta  >  MATE - MAX_PLY) beta  =  MATE - MAX_PLY;
         if (alpha >= beta) return alpha;
-
-        // Current node key should already be set by caller for ply>0,
-        // but ensure it for robustness:
         long key = repStack[ply] != 0L ? repStack[ply] : (repStack[ply] = Zobrist.compute(s));
-
-        // Path-dependent terminal checks (before TT!):
-        // 1) Threefold repetition (count same key in path)
         int freq = 0;
         for (int i = 0; i <= ply; i++){
             if (repStack[i] == key) freq++;
@@ -197,14 +162,6 @@ public class SearchTest implements AiProvider {
             int drawScore = 0;
             return drawScore;
         }
-        // 2) 50-move rule
-        // Adjust method name if your GameState uses a different getter:
-       // if (s.getHalfmoveClock() >= 100){
-       //     int drawScore = 0;
-       //     return drawScore;
-       // }
-
-        // TT probe (after repetition/50M checks)
         TT.TTOut out = new TT.TTOut();
         if (tt.probe(key, depth, alpha, beta, out)) {
             return fromTTScore(out.score, ply);
@@ -213,21 +170,17 @@ public class SearchTest implements AiProvider {
         if (depth == 0 || ply >= MAX_PLY) {
             return evalSTM(s);
         }
-
-        // Generate moves
         List<Integer> moves = new ArrayList<>(MoveGen.generateAllLegal(s));
         if (moves.isEmpty()){
             int score = Attacks.isInCheck(s, s.whiteToMove())
-                    ? (-MATE + ply)   // checkmated; nearer is worse for us
-                    : 0;              // stalemate
+                    ? (-MATE + ply)
+                    : 0;
             tt.store(key, depth, TT.EXACT, toTTScore(score, ply), 0, ttAge);
             return score;
         }
 
         final int a0 = alpha;
         int best = -INF, bestMove = 0;
-
-        // For ordering, if TT move was available it would be in 'out.move', but since probe failed here, it's 0.
         final int hashMove = out.move;
         final boolean inCheck = Attacks.isInCheck(s, s.whiteToMove());
 
@@ -253,34 +206,27 @@ public class SearchTest implements AiProvider {
             moveNum++;
             GameState.Undo u = undo[ply];
             s.makeInPlace(m, u);
-
-            // push child's key into repStack
             repStack[ply+1] = Zobrist.compute(s);
 
             int sc;
             boolean isCapture = GameState.isCapture(m) || GameState.promoKind(m) >= 0;
-
-            // --- PVS + LMR ---
             if (moveNum == 1){
-                // First move: full window
                 sc = -negamax(s, depth-1, -beta, -alpha, ply+1);
             } else {
-                // Late Move Reductions for quiets not in check
                 int d = depth - 1;
                 if (!inCheck && !isCapture && d >= 3 && moveNum > 3){
-                    int r = 1 + (moveNum > 10 ? 1 : 0); // small, safe reduction
+                    int r = 1 + (moveNum > 10 ? 1 : 0);
                     sc = -negamax(s, d - r, -alpha - 1, -alpha, ply+1);
                     if (sc > alpha){
-                        sc = -negamax(s, d, -alpha - 1, -alpha, ply+1); // zero-window re-search
+                        sc = -negamax(s, d, -alpha - 1, -alpha, ply+1);
                         if (sc > alpha && sc < beta){
-                            sc = -negamax(s, d, -beta, -alpha, ply+1);   // full re-search
+                            sc = -negamax(s, d, -beta, -alpha, ply+1);
                         }
                     }
                 } else {
-                    // PVS for everything else
-                    sc = -negamax(s, depth-1, -alpha - 1, -alpha, ply+1); // zero-window
+                    sc = -negamax(s, depth-1, -alpha - 1, -alpha, ply+1);
                     if (sc > alpha && sc < beta){
-                        sc = -negamax(s, depth-1, -beta, -alpha, ply+1);  // full re-search
+                        sc = -negamax(s, depth-1, -beta, -alpha, ply+1);
                     }
                 }
             }
@@ -291,10 +237,9 @@ public class SearchTest implements AiProvider {
             if (best > alpha){
                 alpha = best;
                 if (alpha >= beta){
-                    // Beta cutoff: update killers/history for quiet refutations
                     if (quiet(m)){
                         storeKiller(ply, m);
-                        int side = s.whiteToMove()?1:0; // after unmake, STM flipped, so invert
+                        int side = s.whiteToMove()?1:0;
                         history[side][histIdx(m)] += depth * depth;
                     }
                     break;
@@ -311,14 +256,12 @@ public class SearchTest implements AiProvider {
         return Math.abs(sc) >= MATE - MAX_PLY;
     }
 
-    // Convert a search score to a TT-storable score (normalize by ply)
     private static int toTTScore(int sc, int ply){
-        if (sc >=  MATE - MAX_PLY) return sc + ply; // mate in (MATE - sc)
-        if (sc <= -MATE + MAX_PLY) return sc - ply; // mated in (MATE + sc)
+        if (sc >=  MATE - MAX_PLY) return sc + ply;
+        if (sc <= -MATE + MAX_PLY) return sc - ply;
         return sc;
     }
 
-    // Convert a TT score back to a search score at the current ply
     private static int fromTTScore(int sc, int ply){
         if (sc >=  MATE - MAX_PLY) return sc - ply;
         if (sc <= -MATE + MAX_PLY) return sc + ply;
@@ -335,12 +278,11 @@ public class SearchTest implements AiProvider {
     }
 
     private static int evalSTM(GameState s){
-        int whitePOV = Eval.evaluate(s);     // + is good for White
-        return s.whiteToMove() ? whitePOV    // White to move: keep as-is
-                : -whitePOV;                 // Black to move: flip
+        int whitePOV = Eval.evaluate(s);
+        return s.whiteToMove() ? whitePOV
+                : -whitePOV;
     }
 
-    // ---------------- misc ----------------
     private static long rate(long nodes,long ms){ return ms>0 ? (nodes*1000L)/ms : 0; }
 
     private static String uci(int m){
@@ -351,17 +293,16 @@ public class SearchTest implements AiProvider {
     }
     private static String sq(int i){ return ""+(char)('a'+(i&7))+(char)('1'+(i>>>3)); }
 
-    // ===================== Transposition Table =====================
     static final class TT {
         static final int EXACT = 0, LOWER = 1, UPPER = 2;
 
         static final class Entry {
-            long key;       // zobrist
-            int move;       // best move from this node
-            int score;      // stored score (TT-normalized)
-            int depth;      // search depth at store time
-            int flag;       // EXACT/LOWER/UPPER
-            int age;        // for replacement policy
+            long key;
+            int move;
+            int score;
+            int depth;
+            int flag;
+            int age;
         }
 
         static final class TTOut { public int move; public int score; }
@@ -379,11 +320,6 @@ public class SearchTest implements AiProvider {
 
         private int index(long key){ return (int)key & mask; }
 
-        /**
-         * Probe TT. If a usable entry is found:
-         *  - Always return its move in out.move (for ordering)
-         *  - If entry depth >= requested depth and bound allows, return true with cutoff score
-         */
         boolean probe(long key, int depth, int alpha, int beta, TTOut out){
             Entry e = table[index(key)];
             if (e.key != key){ out.move = 0; return false; }
@@ -397,7 +333,6 @@ public class SearchTest implements AiProvider {
             return false;
         }
 
-        /** Store/replace policy: replace if slot empty, or higher depth, or newer age. */
         void store(long key, int depth, int flag, int score, int move, int age){
             int idx = index(key);
             Entry e = table[idx];
@@ -405,8 +340,8 @@ public class SearchTest implements AiProvider {
                 e.key = key;
                 e.depth = depth;
                 e.flag = flag;
-                e.score = score;        // already TT-normalized by caller
-                if (move != 0) e.move = move; // keep older move if we don't have one
+                e.score = score;
+                if (move != 0) e.move = move;
                 e.age = age;
             }
         }

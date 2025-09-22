@@ -1,12 +1,13 @@
 package com.jaceg18.Gameplay.Opening;
 
 
-
 import com.jaceg18.Gameplay.Utility.GameState;
 import com.jaceg18.Gameplay.Utility.MoveGen;
 import com.jaceg18.Gameplay.Zobrist;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.*;
 
 
@@ -52,7 +53,7 @@ public final class OpeningBook {
 
             if (t.matches("\\d+\\.\\.\\..*")) t = t.substring(t.indexOf("...")+3);
             else if (t.matches("\\d+\\..*")) t = t.substring(t.indexOf('.')+1);
-            t = t.replace("+","").replace("#",""); // ignore check/mate markers
+            t = t.replace("+","").replace("#","");
             if (!t.isEmpty()) toks.add(t);
         }
         if (toks.isEmpty()) return;
@@ -141,7 +142,6 @@ public final class OpeningBook {
                 if (mm==m) return;
                 if (GameState.moverKind(mm)!=pieceKind) return;
                 if (GameState.to(mm)!=toSq) return;
-                // ensure legal source actually from a different square
                 if (GameState.from(mm)==fromSq) return;
                 same[0]=true;
                 if ((GameState.from(mm)&7)==(fromSq&7)) sameFile[0]=true;

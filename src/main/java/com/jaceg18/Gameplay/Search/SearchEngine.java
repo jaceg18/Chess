@@ -1,10 +1,8 @@
 package com.jaceg18.Gameplay.Search;
 
-import com.jaceg18.Gameplay.Search.AI.Algorithm.SearchAlgorithm;
-
 import com.jaceg18.Gameplay.Opening.OpeningBook;
 import com.jaceg18.Gameplay.Search.AI.AiProvider;
-
+import com.jaceg18.Gameplay.Search.AI.Algorithm.SearchAlgorithm;
 import com.jaceg18.Gameplay.Utility.GameState;
 
 import java.util.function.IntConsumer;
@@ -29,7 +27,6 @@ public final class SearchEngine implements AiProvider {
     @Override public void setProgressCallback(IntConsumer cb) { this.progressCb = cb; }
 
     @Override public int pickMove(GameState s) {
-        // 1) Try book
         if (book != null) {
             int bm = book.pick(s);
             if (bm != 0) {
@@ -37,7 +34,6 @@ public final class SearchEngine implements AiProvider {
                 return bm;
             }
         }
-        // 2) Search
         return algo.computeBestMove(s, progressCb);
     }
 }
