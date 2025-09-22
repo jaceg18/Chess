@@ -17,7 +17,7 @@ import java.util.List;
 public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotionListener {
     public static final int BOARD_PX = 720;
 
-    private final Map<Long,Integer> posCounts = new HashMap<>();
+    private  final Map<Long,Integer> posCounts = new HashMap<>();
     private boolean gameOver = false;
 
     private volatile boolean aiRunning = false;

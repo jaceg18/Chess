@@ -3,6 +3,11 @@ package com.jaceg18.Gameplay.Utility;
 
 public final class GameState {
 
+    @Override
+    public GameState clone(){
+        return new GameState(this);
+    }
+
     // ---------- side / rights / clocks ----------
     private boolean whiteToMove = true;
     // castling rights bitmask: 1=WK, 2=WQ, 4=BK, 8=BQ
