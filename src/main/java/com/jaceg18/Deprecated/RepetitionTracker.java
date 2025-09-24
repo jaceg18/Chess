@@ -1,4 +1,8 @@
-package com.jaceg18.Gameplay.Search.AI;
+package com.jaceg18.Deprecated;
+
+import com.jaceg18.Gameplay.Search.AI.SearchConstants;
+
+@Deprecated
 public final class RepetitionTracker {
     private final long[] repStack = new long[SearchConstants.MAX_PLY + 64];
     private int floorPly = 0;
@@ -21,7 +25,6 @@ public final class RepetitionTracker {
         for (int i = floorPly; i <= ply; i++) {
             if (repStack[i] == key) {
                 freq++;
-                System.out.printf("REP HIT at ply=%d freq=%d%n", i, freq);
             }
         }
         return freq >= 3;

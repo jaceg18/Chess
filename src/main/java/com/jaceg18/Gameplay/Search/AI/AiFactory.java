@@ -14,15 +14,15 @@ public class AiFactory {
     public static SearchEngine balanced() {
         var tt = new ArrayTranspositionTable(1 << 20);
         var orderer = new DefaultMoveOrderer();
-        var rep = new RepetitionTracker();
         var eval = new EvaluationStrategy.Default();
         var metrics = new SearchMetrics();
         var depthBox = new MutableInt(8);
 
         SearchAlgorithm algo = new NegamaxAB(
-                new SearchConstants(), tt, orderer, rep, eval, metrics,
+                new SearchConstants(), tt, orderer, eval, metrics,
                 depthBox::get, depthBox::set
         );
+
 
         var cfg = new SearchConfig(
                 depthBox::get,

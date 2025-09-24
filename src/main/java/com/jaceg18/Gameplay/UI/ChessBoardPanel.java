@@ -59,8 +59,8 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
 
 
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_DOWN_MASK), this::undoMove);
-        bind(KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.CTRL_DOWN_MASK), () -> adjustDepth(+1));
-        bind(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.CTRL_DOWN_MASK), () -> adjustDepth(-1));
+        bind(KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.CTRL_DOWN_MASK), () -> adjustTime(+500));
+        bind(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.CTRL_DOWN_MASK), () -> adjustTime(-500));
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_F, 0), () -> { whiteAtBottom = !whiteAtBottom; repaint(); });
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK), () -> setAiPlaysWhite(true));
         bind(KeyStroke.getKeyStroke(KeyEvent.VK_B, InputEvent.CTRL_DOWN_MASK), () -> setAiPlaysBlack(true));
@@ -374,23 +374,27 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         if (aiRunning) return;
 
         boolean aiTurn = state.whiteToMove() ? aiPlaysWhite : aiPlaysBlack;
-
         if (!aiTurn) return;
+
         aiRunning = true;
 
         GameState snap = state.copy();
 
+        ai.setRepetitionCounter(k -> posCounts.getOrDefault(k, 0));
+
         progress.setVisible(true);
         progress.setIndeterminate(true);
-        ai.setProgressCallback(p -> SwingUtilities.invokeLater(() -> {
-            progress.setIndeterminate(false);
-            progress.setValue(p);
-            progress.setString(p + "%");
-        }));
+      ai.setProgressCallback(p -> SwingUtilities.invokeLater(() -> {
+          progress.setIndeterminate(false);
+          progress.setValue(p);
+          progress.setString(p + "%");
+      }));
+
 
         aiThread = new Thread(() -> {
             try {
-                int best = ai.pickMove(snap);
+               int best = ai.pickMove(snap, AI_THINKING_TIME_MS);
+
 
                 SwingUtilities.invokeLater(() -> {
                     progress.setVisible(false);
@@ -398,13 +402,11 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
                     progress.setValue(0);
                     progress.setString(null);
 
-
                     if (gameOver) return;
                     boolean stillAiTurn = state.whiteToMove() ? aiPlaysWhite : aiPlaysBlack;
                     if (!stillAiTurn) return;
 
-
-                    if (best != -1 && MoveGen.generateAllLegal(state).contains(best)) {
+                    if (MoveGen.generateAllLegal(state).contains(best)) {
                         playAnimated(best, this::startAiTurn);
                     }
                 });
@@ -416,6 +418,7 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         aiThread.setDaemon(true);
         aiThread.start();
     }
+
 
 
     private boolean isOwnPiece(int sq) {
@@ -431,7 +434,11 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         getInputMap(WHEN_IN_FOCUSED_WINDOW).put(ks, name);
         getActionMap().put(name, new AbstractAction() { public void actionPerformed(ActionEvent e) { r.run(); }});
     }
-    void adjustDepth(int d) { if (ai != null) { ai.setMaxDepth(Math.max(1, ai.getMaxDepth() + d)); console.logInfo("Max depth: " + ai.getMaxDepth()); } }
+
+
+    public int AI_THINKING_TIME_MS = 2500;
+
+    void adjustTime(int d) { if (ai != null) { AI_THINKING_TIME_MS = (Math.max(1, AI_THINKING_TIME_MS + d)); console.logInfo("Max Time (Ms): " + AI_THINKING_TIME_MS); } }
 
     private void initGameCounters() {
         posCounts.clear();

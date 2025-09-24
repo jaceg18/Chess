@@ -73,8 +73,6 @@ public final class BitUtility {
 
     public static long squaresAKingCouldAttackFrom(int sq)   { return KING_ATTACKS[sq]; }
     public static long squaresAKnightCouldAttackFrom(int sq) { return KNIGHT_ATTACKS[sq]; }
-    public static long squaresAWhitePawnCouldAttackFrom(int sq) { return WHITE_PAWN_ATTACKS[sq]; }
-    public static long squaresABlackPawnCouldAttackFrom(int sq) { return BLACK_PAWN_ATTACKS[sq]; }
 
     public static long squaresARookCouldSlideTo(int sq, long occupancy) {
         return slideNorth(sq, occupancy) | slideSouth(sq, occupancy) | slideEast(sq, occupancy) | slideWest(sq, occupancy);

@@ -3,6 +3,7 @@ package com.jaceg18;
 
 import com.jaceg18.Gameplay.Opening.OpeningBook;
 import com.jaceg18.Gameplay.Search.AI.AiFactory;
+import com.jaceg18.Gameplay.Search.AI.SearchConstants;
 import com.jaceg18.Gameplay.Search.SearchEngine;
 import com.jaceg18.Gameplay.UI.ChessBoardPanel;
 import com.jaceg18.Gameplay.UI.EngineAdapter;
@@ -23,7 +24,7 @@ public class Main {
 
 
             SearchEngine engine = AiFactory.balanced();
-            engine.setMaxDepth(6);
+            engine.setMaxDepth(SearchConstants.MAX_DEPTH);
             try {
                 OpeningBook ob = OpeningBook.load("src/main/resources/openings.txt");
                 engine.setOpeningBook(ob);

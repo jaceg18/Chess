@@ -10,6 +10,11 @@ public final class Eval {
     private static final int TEMPO = 10;
     private static final int BISHOP_PAIR = 30;
 
+    private static final int DRAW_SCORE = 0;
+    private static final int FIFTY_MOVE_SOFT_START = 80;
+    private static final int FIFTY_MOVE_LIMIT      = 100;
+
+
     private static final int CASTLING_RIGHT = 30;
 
     private static final int CASTLED_BONUS_OPEN = 75;
@@ -94,13 +99,9 @@ public final class Eval {
         kEnd  -= KING_CENTER_END_BON  * bc(BK & CENTER_KING);
         int kingScaled = scale(kOpen, kEnd, phase, endgame);
 
-
         int tempo = s.whiteToMove() ? TEMPO : -TEMPO;
 
-
         int safetyOpen = 0;
-
-
         int wKSq = (WK != 0) ? Long.numberOfTrailingZeros(WK) : -1;
         int bKSq = (BK != 0) ? Long.numberOfTrailingZeros(BK) : -1;
 
@@ -113,26 +114,19 @@ public final class Eval {
 
             if (bCastled) safetyOpen -= CASTLED_BONUS_OPEN;
             else if (bKSq == sq("e8")) safetyOpen += UNCASTLED_OPEN_PEN;
+
             boolean wHasCastleRights = (cr & 0b0011) != 0;
             boolean bHasCastleRights = (cr & 0b1100) != 0;
 
             if (!wCastled && wKSq >= 0) {
-                if (wHasCastleRights && wKSq != sq("e1")) {
-                    safetyOpen -= PRECASTLE_KING_MOVE_PEN;
-                }
-                if (wKSq != sq("e1") && wKSq != sq("c1") && wKSq != sq("g1")) {
-                    safetyOpen -= KING_WANDER_PEN;
-                }
+                if (wHasCastleRights && wKSq != sq("e1")) safetyOpen -= PRECASTLE_KING_MOVE_PEN;
+                if (wKSq != sq("e1") && wKSq != sq("c1") && wKSq != sq("g1")) safetyOpen -= KING_WANDER_PEN;
+            }
+            if (!bCastled && bKSq >= 0) {
+                if (bHasCastleRights && bKSq != sq("e8")) safetyOpen += PRECASTLE_KING_MOVE_PEN;
+                if (bKSq != sq("e8") && bKSq != sq("c8") && bKSq != sq("g8")) safetyOpen += KING_WANDER_PEN;
             }
 
-            if (!bCastled && bKSq >= 0) {
-                if (bHasCastleRights && bKSq != sq("e8")) {
-                    safetyOpen += PRECASTLE_KING_MOVE_PEN;
-                }
-                if (bKSq != sq("e8") && bKSq != sq("c8") && bKSq != sq("g8")) {
-                    safetyOpen += KING_WANDER_PEN;
-                }
-            }
             safetyOpen += pawnShieldWhite(WP, wKSq);
             safetyOpen -= pawnShieldBlack(BP, bKSq);
             safetyOpen -= openFilesNearKing(WP, wKSq) * OPEN_FILE_NEAR_KING_PEN;
@@ -145,8 +139,65 @@ public final class Eval {
         int safetyScaled = scale(safetyOpen, 0, phase, endgame);
         int posScaled = scale(pst, pst/2, phase, endgame) + kingScaled + safetyScaled;
 
-        return mat + bp + crScore + posScaled + tempo;
+        int raw = mat + bp + crScore + posScaled + tempo;
+        raw = scaleByFiftyMoveClock(raw, s.halfmoveClock());
+        if (isInsufficientMaterial(WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ)) {
+            return DRAW_SCORE;
+        }
+        raw = compressMinorOnlyIfPawnless(raw, WP, BP, WR, BR, WQ, BQ, WN, BN, WB, BB);
+
+        return raw;
     }
+
+    private static int scaleByFiftyMoveClock(int eval, int hmc) {
+        if (hmc >= FIFTY_MOVE_LIMIT) return DRAW_SCORE;
+        if (hmc <= FIFTY_MOVE_SOFT_START) return eval;
+        int window = FIFTY_MOVE_LIMIT - FIFTY_MOVE_SOFT_START;
+        int remain = FIFTY_MOVE_LIMIT - hmc;
+        int num = eval * remain;
+        int den = window;
+        return (num >= 0) ? (num + den/2) / den : -(( -num + den/2) / den);
+    }
+
+    private static boolean isInsufficientMaterial(long WP, long BP,
+                                                  long WN, long BN,
+                                                  long WB, long BB,
+                                                  long WR, long BR,
+                                                  long WQ, long BQ) {
+
+        if ( (WP | BP | WR | BR | WQ | BQ) != 0 ) return false;
+
+        int wMin = bc(WN) + bc(WB);
+        int bMin = bc(BN) + bc(BB);
+
+
+        if (wMin == 0 && bMin == 0) return true;
+
+
+        if ((wMin == 1 && bMin == 0) || (wMin == 0 && bMin == 1)) return true;
+
+
+        if ((wMin == 2 && bc(WN) == 2 && bMin == 0) ||
+                (bMin == 2 && bc(BN) == 2 && wMin == 0)) return true;
+
+
+        return wMin == 1 && bMin == 1 && bc(WB) == 1 && bc(BB) == 1;
+    }
+
+    private static int compressMinorOnlyIfPawnless(int eval,
+                                                   long WP, long BP,
+                                                   long WR, long BR, long WQ, long BQ,
+                                                   long WN, long BN, long WB, long BB) {
+        boolean noPawns  = (WP | BP) == 0;
+        boolean noMajors = (WR | BR | WQ | BQ) == 0;
+        if (!noPawns || !noMajors) return eval;
+
+        int minors = bc(WN | BN) + bc(WB | BB);
+
+        int denom = (minors <= 2) ? 8 : 4;
+        return (eval >= 0) ? (eval + denom/2) / denom : -(( -eval + denom/2) / denom);
+    }
+
 
     private static int pawnStructure(long myPawns, long oppPawns, boolean white) {
         int score = 0;
@@ -182,6 +233,7 @@ public final class Eval {
         }
         return score;
     }
+
 
     private static int pawnShieldWhite(long WP, int kSq){
         if (kSq < 0) return 0;

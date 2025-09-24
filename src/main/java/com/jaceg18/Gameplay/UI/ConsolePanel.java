@@ -51,13 +51,13 @@ public class ConsolePanel extends JPanel {
         undoBtn.setToolTipText("Undo last move (Ctrl+Z)");
         undoBtn.addActionListener(e -> board.undoMove());
 
-        JButton depthDown = new JButton("Depth −");
-        depthDown.setToolTipText("Decrease AI depth (Ctrl+↓)");
-        depthDown.addActionListener(e -> board.adjustDepth(-1));
+        JButton depthDown = new JButton("Time −");
+        depthDown.setToolTipText("Decrease AI Thinking Time (Ctrl+↓)");
+        depthDown.addActionListener(e -> board.adjustTime(-500));
 
-        JButton depthUp   = new JButton("Depth +");
-        depthUp.setToolTipText("Increase AI depth (Ctrl+↑)");
-        depthUp.addActionListener(e -> board.adjustDepth(+1));
+        JButton depthUp   = new JButton("Time +");
+        depthUp.setToolTipText("Increase AI Thinking Time (Ctrl+↑)");
+        depthUp.addActionListener(e -> board.adjustTime(+500));
 
         JButton flipBtn   = new JButton("Flip");
         flipBtn.setToolTipText("Flip board (F)");

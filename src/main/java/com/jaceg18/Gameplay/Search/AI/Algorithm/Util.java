@@ -13,15 +13,15 @@ public final class Util {
 
     static long rate(long nodes,long ms){ return ms>0 ? (nodes*1000L)/ms : 0; }
 
-    static boolean isMateScore(int sc){
+    public static boolean isMateScore(int sc){
         return Math.abs(sc) >= SearchConstants.MATE - SearchConstants.MAX_PLY;
     }
-    static int toTTScore(int sc, int ply){
+    public static int toTTScore(int sc, int ply){
         if (sc >=  SearchConstants.MATE - SearchConstants.MAX_PLY) return sc + ply;
         if (sc <= -SearchConstants.MATE + SearchConstants.MAX_PLY) return sc - ply;
         return sc;
     }
-    static int fromTTScore(int sc, int ply){
+    public static int fromTTScore(int sc, int ply){
         if (sc >=  SearchConstants.MATE - SearchConstants.MAX_PLY) return sc - ply;
         if (sc <= -SearchConstants.MATE + SearchConstants.MAX_PLY) return sc + ply;
         return sc;
@@ -34,7 +34,7 @@ public final class Util {
     }
     static String sq(int i){ return ""+(char)('a'+(i&7))+(char)('1'+(i>>>3)); }
 
-    static String scoreStr(int sc){
+    public static String scoreStr(int sc){
         if (isMateScore(sc)){
             int matePly = (sc > 0) ? (SearchConstants.MATE - sc) : (SearchConstants.MATE + sc);
             int mateMoves = (matePly + 1) / 2;

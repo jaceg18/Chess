@@ -6,6 +6,7 @@ import com.jaceg18.Gameplay.Search.AI.Algorithm.SearchAlgorithm;
 import com.jaceg18.Gameplay.Utility.GameState;
 
 import java.util.function.IntConsumer;
+import java.util.function.LongToIntFunction;
 
 public final class SearchEngine implements AiProvider {
     private final SearchConfig cfg;
@@ -22,11 +23,20 @@ public final class SearchEngine implements AiProvider {
     public void setOpeningBook(OpeningBook book) { this.book = book; }
 
     @Override public void setMaxDepth(int d) { cfg.maxDepthSetter().accept(d); }
+
+
     @Override public int getMaxDepth() { return cfg.maxDepthSupplier().getAsInt(); }
 
     @Override public void setProgressCallback(IntConsumer cb) { this.progressCb = cb; }
 
-    @Override public int pickMove(GameState s) {
+
+    @Override
+    public void setRepetitionCounter(LongToIntFunction o) {
+        algo.setRepetitionCounter(o);
+    }
+
+
+    @Override public int pickMove(GameState s, int timeMs) {
         if (book != null) {
             int bm = book.pick(s);
             if (bm != 0) {
@@ -34,6 +44,7 @@ public final class SearchEngine implements AiProvider {
                 return bm;
             }
         }
-        return algo.computeBestMove(s, progressCb);
+        return timeMs > 0 ? algo.computeBestMove(s, timeMs, null) : algo.computeBestMove(s, progressCb);
+
     }
 }
