@@ -30,6 +30,7 @@ public final class GameState {
         return m;
     }
 
+
     public static int promoKind(int m){
         int k = (m >>> 12) & 7;
         return (k == 0) ? -1 : (k - 1);
