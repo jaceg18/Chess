@@ -477,6 +477,8 @@ public final class NegamaxAB implements SearchAlgorithm {
         return best;
     }
 
+
+
     private boolean repeatsOnPathAny(int ply) {
         long key = pathKeys[ply];
         int start = Math.max(floorPly, 1);

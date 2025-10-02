@@ -14,7 +14,15 @@ import java.util.*;
 
 public final class OpeningBook {
     private final Map<Long, Int2IntMap> book = new HashMap<>();
-    private final Random rng = new Random(0xC0FFEE);
+    private final Random rng = new Random();
+
+    private final Map<Long, String> openingNameByStart = new HashMap<>();
+
+
+    public String getOpeningName(GameState s) {
+        return openingNameByStart.get(Zobrist.compute(s));
+    }
+
 
     public static OpeningBook load(String path) throws IOException {
         OpeningBook ob = new OpeningBook();
@@ -45,29 +53,58 @@ public final class OpeningBook {
         line = line.trim();
         if (line.isEmpty() || line.startsWith("#") || line.startsWith(";")) return;
 
+
+        String openingName = null;
+        int bar = line.indexOf('|');
+        if (bar >= 0) {
+            openingName = line.substring(bar + 1).trim();
+            line = line.substring(0, bar).trim();
+        }
+
+        line = line.replaceAll("(?<!^)(?<!\\s)(\\d+\\.{1,3})", " $1");
+
+        line = line.replaceAll("\\s+", " ").trim();
+
         List<String> toks = new ArrayList<>();
         for (String t : line.split("\\s+")) {
             if (t.isEmpty()) continue;
 
             t = t.replaceAll("[\\u200B\\u00A0]", "");
 
-            if (t.matches("\\d+\\.\\.\\..*")) t = t.substring(t.indexOf("...")+3);
-            else if (t.matches("\\d+\\..*")) t = t.substring(t.indexOf('.')+1);
+            if (t.matches("\\d+\\.\\.\\..*")) t = t.substring(t.indexOf("...") + 3);
+            else if (t.matches("\\d+\\..*"))   t = t.substring(t.indexOf('.') + 1);
+
             t = t.replace("+","").replace("#","");
             if (!t.isEmpty()) toks.add(t);
         }
         if (toks.isEmpty()) return;
 
         GameState s = new GameState();
+        boolean madeAnyMove = false;
 
         for (String sanLike : toks) {
             int move = resolveTokenToMove(s, sanLike);
             if (move == 0) break;
+
             long key = Zobrist.compute(s);
+
+
+            if (openingName != null && !openingName.isEmpty()) {
+                openingNameByStart.putIfAbsent(key, openingName);
+            }
+
             add(key, move, 1);
             s.make(move);
+            madeAnyMove = true;
         }
+
+        if (madeAnyMove && openingName != null && !openingName.isEmpty()) {
+            long startKey = Zobrist.compute(new GameState());
+            openingNameByStart.putIfAbsent(startKey, openingName);
+        }
+
     }
+
 
 
     private int resolveTokenToMove(GameState s, String tok) {

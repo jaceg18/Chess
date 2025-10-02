@@ -8,11 +8,11 @@ public final class Eval {
     private static final int P = 100, N = 320, B = 330, R = 500, Q = 900;
 
     private static final int TEMPO = 10;
-    private static final int BISHOP_PAIR = 30;
+    private static final int BISHOP_PAIR = 40;
 
     private static final int DRAW_SCORE = 0;
     private static final int FIFTY_MOVE_SOFT_START = 80;
-    private static final int FIFTY_MOVE_LIMIT      = 100;
+    private static final int FIFTY_MOVE_LIMIT = 100;
 
 
     private static final int CASTLING_RIGHT = 30;
@@ -25,7 +25,7 @@ public final class Eval {
 
     private static final int DOUBLED_PEN = 12;
     private static final int ISOLATED_PEN = 10;
-    private static final int[] PP_BONUS = {0,0,12,20,36,60,100,0};
+    private static final int[] PP_BONUS = {0, 0, 12, 20, 36, 60, 100, 0};
 
     private static final int PAWN_CENTER = 8;
     private static final int KNIGHT_CENTER = 10;
@@ -43,8 +43,8 @@ public final class Eval {
     private static final int PH_N = 1, PH_B = 1, PH_R = 2, PH_Q = 4, PH_MAX = 24;
 
     private static final long[] FILE = new long[8];
-    private static final long CENTER4 = mask("d4","e4","d5","e5");
-    private static final long CENTER_KING = maskRect(2,2,5,5);
+    private static final long CENTER4 = mask("d4", "e4", "d5", "e5");
+    private static final long CENTER_KING = maskRect(2, 2, 5, 5);
 
     private static final long[] IN_FRONT_W = new long[64];
     private static final long[] IN_FRONT_B = new long[64];
@@ -81,17 +81,25 @@ public final class Eval {
         int mat =  P*(wP-bP) + N*(wN-bN) + B*(wB-bB) + R*(wR-bR) + Q*(wQ-bQ);
         int bp = ((wB >= 2) ? BISHOP_PAIR : 0) - ((bB >= 2) ? BISHOP_PAIR : 0);
         int cr = s.castlingRights();
-        int crScore = (((cr&1)!=0?CASTLING_RIGHT:0) + ((cr&2)!=0?CASTLING_RIGHT:0))
-                - (((cr&4)!=0?CASTLING_RIGHT:0) + ((cr&8)!=0?CASTLING_RIGHT:0));
-        int phase = clamp(
-                PH_N*(wN+bN) + PH_B*(wB+bB) + PH_R*2*(wR+bR) + PH_Q*4*(wQ+bQ),
-                0, PH_MAX);
-        int endgame = PH_MAX - phase;
+
+        int maxPhaseRaw = PH_N*4 + PH_B*4 + PH_R*4 + PH_Q*2;
+        int phaseRaw    = PH_N*(wN+bN) + PH_B*(wB+bB) + PH_R*(wR+bR) + PH_Q*(wQ+bQ);
+        int phase       = (phaseRaw * PH_MAX + maxPhaseRaw/2) / maxPhaseRaw;
+        int endgame     = PH_MAX - phase;
+
+        int crWhiteOpen = ((cr & 0b0001) != 0 ? CASTLING_RIGHT : 0)
+                + ((cr & 0b0010) != 0 ? CASTLING_RIGHT : 0);
+        int crBlackOpen = ((cr & 0b0100) != 0 ? CASTLING_RIGHT : 0)
+                + ((cr & 0b1000) != 0 ? CASTLING_RIGHT : 0);
+        int crScore     = scale(crWhiteOpen, 0, phase, endgame)
+                - scale(crBlackOpen, 0, phase, endgame);
+
         int pst = 0;
         pst += pawnStructure(WP, BP, true);
         pst -= pawnStructure(BP, WP, false);
         pst += PAWN_CENTER * bc(WP & CENTER4) - PAWN_CENTER * bc(BP & CENTER4);
         pst += KNIGHT_CENTER * bc(WN & CENTER4) - KNIGHT_CENTER * bc(BN & CENTER4);
+
         int kOpen = 0, kEnd = 0;
         kOpen -= KING_CENTER_OPEN_PEN * bc(WK & CENTER_KING);
         kOpen += KING_CENTER_OPEN_PEN * bc(BK & CENTER_KING);
@@ -129,8 +137,10 @@ public final class Eval {
 
             safetyOpen += pawnShieldWhite(WP, wKSq);
             safetyOpen -= pawnShieldBlack(BP, bKSq);
-            safetyOpen -= openFilesNearKing(WP, wKSq) * OPEN_FILE_NEAR_KING_PEN;
-            safetyOpen += openFilesNearKing(BP, bKSq) * OPEN_FILE_NEAR_KING_PEN;
+
+            safetyOpen -= openFilesNearKing(WP, wKSq, true)  * OPEN_FILE_NEAR_KING_PEN;
+            safetyOpen += openFilesNearKing(BP, bKSq, false) * OPEN_FILE_NEAR_KING_PEN;
+
             safetyOpen += kingRingPressureWhite(s, bKSq) * KING_RING_ATTACK;
             safetyOpen -= kingRingPressureBlack(s, wKSq) * KING_RING_ATTACK;
             if (wKSq >= 0 && Attacks.isInCheck(s, true))  safetyOpen -= CHECK_BONUS;
@@ -140,16 +150,36 @@ public final class Eval {
         int posScaled = scale(pst, pst/2, phase, endgame) + kingScaled + safetyScaled;
 
         int raw = mat + bp + crScore + posScaled + tempo;
-        raw = scaleByFiftyMoveClock(raw, s.halfmoveClock());
+
+        boolean fiftyExempt = hasLikelyMateWithoutPawnMove(WP, BP, WR, BR, WQ, BQ, WN, BN, WB, BB);
+        raw = scaleByFiftyMoveClock(raw, s.halfmoveClock(), fiftyExempt);
+
         if (isInsufficientMaterial(WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ)) {
             return DRAW_SCORE;
         }
-        raw = compressMinorOnlyIfPawnless(raw, WP, BP, WR, BR, WQ, BQ, WN, BN, WB, BB);
 
+        raw = compressMinorOnlyIfPawnless(raw, WP, BP, WR, BR, WQ, BQ, WN, BN, WB, BB);
         return raw;
     }
+    private static boolean hasLikelyMateWithoutPawnMove(
+            long WP, long BP,
+            long WR, long BR, long WQ, long BQ,
+            long WN, long BN, long WB, long BB) {
 
-    private static int scaleByFiftyMoveClock(int eval, int hmc) {
+        if ((WR | BR | WQ | BQ) != 0) return true;
+
+        boolean noPawns = (WP | BP) == 0;
+        if (noPawns) {
+            int wMin = Long.bitCount(WN) + Long.bitCount(WB);
+            int bMin = Long.bitCount(BN) + Long.bitCount(BB);
+            if ((wMin >= 2 && bMin == 0) || (bMin >= 2 && wMin == 0)) return true;
+        }
+        return false;
+    }
+
+
+    private static int scaleByFiftyMoveClock(int eval, int hmc, boolean exempt) {
+        if (exempt) return eval;
         if (hmc >= FIFTY_MOVE_LIMIT) return DRAW_SCORE;
         if (hmc <= FIFTY_MOVE_SOFT_START) return eval;
         int window = FIFTY_MOVE_LIMIT - FIFTY_MOVE_SOFT_START;
@@ -158,6 +188,9 @@ public final class Eval {
         int den = window;
         return (num >= 0) ? (num + den/2) / den : -(( -num + den/2) / den);
     }
+
+
+
 
     private static boolean isInsufficientMaterial(long WP, long BP,
                                                   long WN, long BN,
@@ -192,11 +225,18 @@ public final class Eval {
         boolean noMajors = (WR | BR | WQ | BQ) == 0;
         if (!noPawns || !noMajors) return eval;
 
-        int minors = bc(WN | BN) + bc(WB | BB);
+        int wMin = bc(WN) + bc(WB);
+        int bMin = bc(BN) + bc(BB);
 
-        int denom = (minors <= 2) ? 8 : 4;
+        if ((wMin >= 2 && bMin == 0) || (bMin >= 2 && wMin == 0)) return eval;
+
+        int minors = wMin + bMin;
+
+        int denom = (minors <= 2) ? 2 : 3;
+
         return (eval >= 0) ? (eval + denom/2) / denom : -(( -eval + denom/2) / denom);
     }
+
 
 
     private static int pawnStructure(long myPawns, long oppPawns, boolean white) {
@@ -265,16 +305,19 @@ public final class Eval {
         return score;
     }
 
-    private static int openFilesNearKing(long myPawns, int kSq){
+    private static int openFilesNearKing(long myPawns, int kSq, boolean white){
         if (kSq < 0) return 0;
         int f = kSq & 7;
+        long frontMask = white ? IN_FRONT_W[kSq] : IN_FRONT_B[kSq];
         int openCnt = 0;
-        for (int df=-1; df<=1; df++){
+        for (int df = -1; df <= 1; df++){
             int ff = f + df; if (ff < 0 || ff > 7) continue;
-            if ((myPawns & FILE[ff]) == 0) openCnt++;
+            long laneForward = FILE[ff] & frontMask;
+            if ((myPawns & laneForward) == 0) openCnt++;
         }
         return openCnt;
     }
+
 
     private static int kingRingPressureWhite(GameState s, int blackKingSq){
         if (blackKingSq < 0) return 0;
@@ -324,8 +367,6 @@ public final class Eval {
         return (num >= 0) ? (num + PH_MAX/2) / PH_MAX : -(( -num + PH_MAX/2) / PH_MAX);
     }
 
-    private static int clamp(int v, int lo, int hi){ return v<lo?lo:(v>hi?hi:v); }
-
     private static long mask(String... squares){
         long m=0; for (String s : squares) m |= 1L << ((s.charAt(1)-'1')*8 + (s.charAt(0)-'a'));
         return m;
@@ -340,12 +381,5 @@ public final class Eval {
 
     private static long projectToFiles(long pawns, int file){
         return (pawns & FILE[file]) != 0 ? FILE[file] : 0L;
-    }
-
-    @SuppressWarnings("unused")
-    private static long shiftFileMask(long bb, int df){
-        if (df < 0) return (bb & ~FILE[0]) >>> 1;
-        if (df > 0) return (bb & ~FILE[7]) << 1;
-        return bb;
     }
 }

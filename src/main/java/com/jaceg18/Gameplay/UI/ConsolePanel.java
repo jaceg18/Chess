@@ -13,7 +13,7 @@ import java.awt.*;
 
 
 
-public class ConsolePanel extends JPanel {
+public class ConsolePanel extends JPanel implements ConsoleInterface {
     private final JTextPane area = new JTextPane();
     private final StyledDocument doc = area.getStyledDocument();
     private final EvalBar evalBar = new EvalBar();

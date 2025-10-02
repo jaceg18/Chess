@@ -28,12 +28,12 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     private final SelectionModel selection = new SelectionModel();
     private final MoveAnimator animator = new MoveAnimator(this);
     private final PieceSprites sprites = new PieceSprites();
-    private final BoardPainter painter = new BoardPainter(this);
+    private final ModernBoardPainter painter = new ModernBoardPainter(this);
 
-    public static ConsolePanel console;
+    public static ConsoleInterface console;
 
     private final JProgressBar progress = new JProgressBar(0, 100);
-    boolean whiteAtBottom = true;
+    public boolean whiteAtBottom = true;
     private boolean aiPlaysWhite = false;
     private boolean aiPlaysBlack = false;
 
@@ -122,6 +122,17 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
 
     public void setAi(AiProvider ai) { this.ai = ai; }
+    
+    public void resetGame() {
+        state.setToStartpos();
+        undo.clear();
+        selection.clear();
+        painter.clearLastMove();
+        initGameCounters();
+        repaint();
+        console.logInfo("New game started");
+    }
+    
     public void setAiPlaysWhite(boolean asWhite) {
         aiPlaysWhite = asWhite;
         aiPlaysBlack = false;
@@ -158,13 +169,13 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         sprites.ensureScaled(S);
 
         painter.drawBoard(g, S, whiteAtBottom);
-        painter.drawCoords(g, S, whiteAtBottom);
+        painter.drawCoordinates(g, S, whiteAtBottom);
         painter.drawCheck(g, S, whiteAtBottom, state);
         painter.drawSelection(g, S, whiteAtBottom, selection);
         painter.drawHover(g, S, whiteAtBottom);
+        painter.drawLastMove(g, S, whiteAtBottom);
         painter.drawPieces(g, S, whiteAtBottom, state, sprites, animator);
         animator.drawAnimatingPiece(g, S, whiteAtBottom, this::viewRC);
-        painter.drawDragged(g, S, whiteAtBottom, animator, this::viewRC);
 
         g.dispose();
     }
@@ -242,8 +253,8 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
         repaint();
     }
 
-    @Override public void mouseMoved(MouseEvent e) { painter.hoverSq = boardSq(e.getY() / squareSize(), e.getX() / squareSize()); repaint(); }
-    @Override public void mouseExited(MouseEvent e) { painter.hoverSq = -1; repaint(); }
+    @Override public void mouseMoved(MouseEvent e) { painter.setHoverSquare(boardSq(e.getY() / squareSize(), e.getX() / squareSize())); repaint(); }
+    @Override public void mouseExited(MouseEvent e) { painter.setHoverSquare(-1); repaint(); }
     @Override public void mouseEntered(MouseEvent e) {}
     @Override public void mouseClicked(MouseEvent e) {}
 
@@ -305,7 +316,7 @@ public class ChessBoardPanel extends JPanel implements MouseListener, MouseMotio
     }
 
 
-    void undoMove() {
+    public void undoMove() {
         if (undo.isEmpty()) return;
 
         if (aiRunning) {

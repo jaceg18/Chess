@@ -4,6 +4,7 @@ import com.jaceg18.Gameplay.Opening.OpeningBook;
 import com.jaceg18.Gameplay.Search.AI.AiProvider;
 import com.jaceg18.Gameplay.Search.AI.Algorithm.SearchAlgorithm;
 import com.jaceg18.Gameplay.Utility.GameState;
+import com.jaceg18.ModernMain;
 
 import java.util.function.IntConsumer;
 import java.util.function.LongToIntFunction;
@@ -14,6 +15,8 @@ public final class SearchEngine implements AiProvider {
     private IntConsumer progressCb;
 
     private final SearchAlgorithm algo;
+
+    private boolean declaredOpening = false;
 
     public SearchEngine(SearchConfig cfg) {
         this.cfg = cfg;
@@ -40,9 +43,19 @@ public final class SearchEngine implements AiProvider {
         if (book != null) {
             int bm = book.pick(s);
             if (bm != 0) {
+                if (!declaredOpening){
+                    GameState clone = s.clone();
+                    clone.make(bm);
+                    String name = book.getOpeningName(clone);
+                    if (name != null && !name.isEmpty()) {
+                        ModernMain.displayOpening(name);
+                    }
+                    declaredOpening = true;
+                }
                 if (progressCb != null) progressCb.accept(100);
                 return bm;
             }
+
         }
         return timeMs > 0 ? algo.computeBestMove(s, timeMs, null) : algo.computeBestMove(s, progressCb);
 
