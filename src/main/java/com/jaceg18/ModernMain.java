@@ -17,7 +17,7 @@ import java.awt.event.WindowEvent;
 import java.io.IOException;
 
 public class ModernMain {
-    private static final String APP_TITLE = "Modern Chess Engine";
+    private static final String APP_TITLE = "Chess";
     private static final String APP_VERSION = "v2.0";
     private static ModernConsolePanel console;
     
@@ -74,7 +74,7 @@ public class ModernMain {
             }
         });
         frame.setVisible(true);
-        console.logInfo("Welcome to " + APP_TITLE + " " + APP_VERSION);
+        console.logInfo("Welcome to " + APP_TITLE + " " + APP_VERSION + " created by Jace Grant.");
         console.logInfo("Ready to play! Use the buttons or keyboard shortcuts to control the game.");
     }
 
@@ -224,8 +224,7 @@ public class ModernMain {
         String about = """
             %s %s
             
-            A modern chess engine with beautiful UI
-            Built with Java Swing
+            A Chess engine with a Java Swing UI
             
             Features:
             • Advanced chess AI with search algorithms
@@ -234,7 +233,8 @@ public class ModernMain {
             • Modern, responsive interface
             • Smooth animations and effects
             
-            © 2024 Chess Engine Project
+            © 2025 Chess Engine Project
+            • Created & Developed by Jace Grant
             """.formatted(APP_TITLE, APP_VERSION);
         
         JOptionPane.showMessageDialog(parent, about, "About " + APP_TITLE, 

@@ -9,4 +9,5 @@ public interface ConsoleInterface {
     void setEvalCp(int cp);
     void setTbInfo(String category, Integer dtm, Integer dtz, String bestUci);
     void clearTbInfo();
+
 }

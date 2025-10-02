@@ -153,8 +153,14 @@ public class ModernConsolePanel extends JPanel implements ConsoleInterface {
         ((ModernButton) row2.getComponent(1)).addActionListener(e -> board.setAiPlaysBlack(true));
         ((ModernButton) row2.getComponent(2)).addActionListener(e -> board.setAiBoth(true));
         ((ModernButton) row2.getComponent(3)).addActionListener(e -> board.setAiNone());
-        ((ModernButton) row3.getComponent(0)).addActionListener(e -> board.adjustTime(-500));
-        ((ModernButton) row3.getComponent(1)).addActionListener(e -> board.adjustTime(+500));
+        ((ModernButton) row3.getComponent(0)).addActionListener(e -> {
+            board.adjustTime(-500);
+            setThinkingTime(board.AI_THINKING_TIME_MS);
+        });
+        ((ModernButton) row3.getComponent(1)).addActionListener(e -> {
+            board.adjustTime(+500);
+            setThinkingTime(board.AI_THINKING_TIME_MS);
+        });
         ((ModernButton) row3.getComponent(2)).addActionListener(e -> board.probeTB());
     }
     

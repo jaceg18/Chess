@@ -18,7 +18,6 @@ public class ModernButton extends JButton {
     private Color pressedColor;
     private Color textColor;
 
-
     public ModernButton(String text) {
         this(text, ButtonStyle.PRIMARY);
     }
