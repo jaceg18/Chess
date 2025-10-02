@@ -19,7 +19,7 @@ public class ModernConsolePanel extends JPanel implements ConsoleInterface {
     
     private final JLabel gameStatusLabel = new JLabel("Ready to play");
     private final JLabel moveCountLabel = new JLabel("Move: 1");
-    private final JLabel timeLabel = new JLabel("Time: 5.0s");
+    private final JLabel timeLabel = new JLabel("Time: 2.5s");
     
     private final JLabel tbBest = new JLabel("—");
     private final JLabel tbDTM = new JLabel("—");
@@ -239,6 +239,7 @@ public class ModernConsolePanel extends JPanel implements ConsoleInterface {
     }
     
     public void setThinkingTime(double seconds) {
+        seconds = seconds / 1000;
         timeLabel.setText(String.format("Time: %.1fs", seconds));
     }
     
